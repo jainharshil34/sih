@@ -47,24 +47,8 @@ function createPinIcon(color = '#f59e0b', label = '') {
 
 export const OSM_THEMES = [
   {
-    id: 'voyager',
-    name: 'OSM Voyager (Crisp HD)',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  },
-  {
-    id: 'dark',
-    name: 'OSM Dark Cockpit',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  },
-  {
     id: 'hot',
-    name: 'OSM Detailed (HOT)',
+    name: 'OSM Detailed (Humanitarian)',
     url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c'],
     maxZoom: 19,
@@ -72,8 +56,24 @@ export const OSM_THEMES = [
   },
   {
     id: 'standard',
-    name: 'OSM Standard',
+    name: 'OSM Standard (Official)',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  },
+  {
+    id: 'streets',
+    name: 'Clean Street Navigation',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    subdomains: ['a', 'b', 'c'],
+    maxZoom: 19,
+    attribution: '&copy; Esri &mdash; Street Navigation',
+  },
+  {
+    id: 'de',
+    name: 'OSM HD (High-Speed)',
+    url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c'],
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors',
@@ -104,7 +104,7 @@ export default function SplitScreenMap({
   const leftTileRef = useRef(null);
   const rightTileRef = useRef(null);
 
-  const [activeTheme, setActiveTheme] = useState('voyager');
+  const [activeTheme, setActiveTheme] = useState('hot');
 
   // Layer references for high-performance direct Leaflet updates (60fps)
   const leftLayersRef = useRef({
