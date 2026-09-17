@@ -1,0 +1,9 @@
+# Pinned Dependencies for NavResilient Engine (Python 3.12+)
+numpy==1.26.4
+scipy==1.15.3
+pandas==2.2.1
+torch==2.7.1
+filterpy==1.4.5
+networkx==3.5
+matplotlib==3.8.3
+pytest>=8.0.0

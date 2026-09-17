@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NavResilient — AI-Aided Resilient GNSS/INS Navigation Dashboard (SIH26168 | ISRO)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Chart.js for Live Real-Time Waveforms & Benchmark Curves -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Main Top Navigation -->
+    <header class="main-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <div class="pulse-ring"></div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">NAVRESILIENT <span class="badge-tag">ISRO SIH26168</span></div>
+          <div class="brand-subtitle">AI-Aided Dead Reckoning & Navigation Engine · Edge & Smartphone Deployable</div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-mission">
+          <span class="tab-icon">🚀</span>
+          <span>Live Mission & IRL Demo</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-benchmark">
+          <span class="tab-icon">📊</span>
+          <span>5-Tier Benchmark</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-models">
+          <span class="tab-icon">🧠</span>
+          <span>AI Neural Nets</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-sensors">
+          <span class="tab-icon">📡</span>
+          <span>Sensors & Calibration</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-edge">
+          <span class="tab-icon">🔌</span>
+          <span>Edge API & Terminal</span>
+        </button>
+      </nav>
+
+      <!-- Status Badges -->
+      <div class="header-right">
+        <div id="live-gnss-status" class="status-pill status-locked">
+          <span class="status-glow"></span>
+          <span id="txt-gnss-status">GNSS / NavIC LOCKED</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="pill-label">LATENCY</span>
+          <span id="txt-engine-latency" class="pill-val">3.8 ms</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Area: Tabs -->
+    <main class="content-container">
+
+      <!-- ========================================================================= -->
+      <!-- TAB 1: LIVE MISSION & REAL DRIVE DEMO (IRL & IO-VNBD DATASET) -->
+      <!-- ========================================================================= -->
+      <section id="tab-mission" class="tab-pane active">
+        <div class="mission-grid">
+          
+          <!-- Map Section -->
+          <div class="map-card glass-panel">
+            <div class="card-toolbar">
+              <div class="toolbar-left">
+                <span class="toolbar-title">📍 Live Spatial Telemetry Map</span>
+                <span id="map-drive-name" class="drive-badge">Dataset: S-Vw12</span>
+              </div>
+              <div class="toolbar-right">
+                <button id="btn-trigger-tunnel" class="action-btn btn-danger pulse-action">
+                  <span class="btn-dot"></span> Simulate Tunnel Outage
+                </button>
+                <button id="btn-trigger-parking" class="action-btn btn-warning">
+                  🅿️ Underground Garage
+                </button>
+                <button id="btn-restore-gnss" class="action-btn btn-success">
+                  🛰️ Restore NavIC Fix
+                </button>
+                <button id="btn-inject-shock" class="action-btn btn-secondary">
+                  ⚡ Inject Pothole Shock
+                </button>
+              </div>
+            </div>
+
+            <!-- Leaflet Interactive Map -->
+            <div id="leaflet-map" class="map-viewport"></div>
+
+            <!-- Floating Overlay HUD on Map -->
+            <div class="map-hud-overlay">
+              <div class="hud-box">
+                <div class="hud-label">DEAD RECKONING DRIFT</div>
+                <div id="hud-drift-pct" class="hud-value hud-green">2.11%</div>
+                <div class="hud-target">ISRO Target: &lt; 10.0%</div>
+              </div>
+              <div class="hud-box">
+                <div class="hud-label">OUTAGE DISPLACEMENT</div>
+                <div id="hud-distance-traveled" class="hud-value">767 m</div>
+                <div id="hud-outage-timer" class="hud-sub">Blackout: 0.0 s</div>
+              </div>
+              <div class="hud-box">
+                <div class="hud-label">POSITION UNCERTAINTY (1σ)</div>
+                <div id="hud-uncertainty" class="hud-value">1.45 m</div>
+                <div class="hud-sub">UKF Dilation: Active</div>
+              </div>
+            </div>
+
+            <!-- Trajectory Legend -->
+            <div class="map-legend-card">
+              <div class="legend-row"><span class="legend-dot gt-dot"></span> Ground Truth (GNSS/CAN)</div>
+              <div class="legend-row"><span class="legend-dot ai-dot"></span> NavResilient AI-UKF (Inferred)</div>
+              <div class="legend-row"><span class="legend-dot mm-dot"></span> Snapped Road (HMM + OSM)</div>
+            </div>
+
+            <!-- Playback & Scrubber Controls -->
+            <div class="playback-bar">
+              <button id="btn-play-pause" class="ctrl-btn play-btn">▶</button>
+              <button id="btn-restart" class="ctrl-btn reset-btn">↺</button>
+              <div class="time-readout" id="txt-playback-time">00:00 / 02:40</div>
+              <input type="range" id="drive-scrubber" min="0" max="1000" value="0" class="time-slider">
+              
+              <div class="speed-selector">
+                <button class="speed-btn active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+                <button class="speed-btn" data-speed="5">5x</button>
+                <button class="speed-btn" data-speed="10">10x</button>
+              </div>
+
+              <!-- Real Phone Sensor Toggle -->
+              <button id="btn-phone-sensor" class="phone-sensor-btn" title="Stream live accelerometer & gyroscope from your mobile phone or laptop">
+                📱 Real Handheld Device IMU
+              </button>
+            </div>
+          </div>
+
+          <!-- Right Telemetry & Instrument Cluster -->
+          <div class="telemetry-column">
+            
+            <!-- Dataset & Drive Selector Card -->
+            <div class="card glass-panel">
+              <div class="card-header">
+                <span class="card-title">🚗 Drive Selection (IO-VNBD Dataset)</span>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="drive-select">Active Synchronized Recording:</label>
+                  <select id="drive-select" class="form-select">
+                    <option value="S-Vw12">S-Vw12 (Ford Fiesta · Urban Canyon & Turns)</option>
+                    <option value="S-Vta10">S-Vta10 (Dynamic Mount · Highway Cruise)</option>
+                    <option value="S-Vtb8">S-Vtb8 (Stop & Go · High Traffic)</option>
+                    <option value="S-Vw10">S-Vw10 (High Speed Arterial)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Virtual Instrument Cluster (Gauges) -->
+            <div class="card glass-panel instrument-cluster">
+              <div class="card-header">
+                <span class="card-title">🎛️ Live Instrument Cockpit</span>
+                <span id="motion-regime-badge" class="regime-tag tag-moving">IN_MOTION</span>
+              </div>
+              <div class="card-body instruments-grid">
+                
+                <!-- Speedometer -->
+                <div class="instrument-box">
+                  <div class="gauge-title">FORWARD VELOCITY</div>
+                  <div class="speedo-container">
+                    <svg class="speedo-dial" viewBox="0 0 120 120">
+                      <path class="dial-bg" d="M 20 100 A 50 50 0 1 1 100 100" fill="none" stroke="#1E293B" stroke-width="10" stroke-linecap="round"/>
+                      <path id="speedo-arc" class="dial-fill" d="M 20 100 A 50 50 0 1 1 100 100" fill="none" stroke="#0284C7" stroke-width="10" stroke-linecap="round" stroke-dasharray="210" stroke-dashoffset="150"/>
+                    </svg>
+                    <div class="speedo-text">
+                      <span id="val-speed-kmh" class="speed-num">52</span>
+                      <span class="speed-unit">km/h</span>
+                      <span id="val-speed-mps" class="speed-sub">14.4 m/s</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3D Attitude Horizon (Pitch/Roll) -->
+                <div class="instrument-box">
+                  <div class="gauge-title">PHONE MOUNT ATTITUDE</div>
+                  <div class="horizon-container">
+                    <div id="horizon-disc" class="horizon-disc">
+                      <div class="horizon-sky"></div>
+                      <div class="horizon-ground"></div>
+                      <div class="horizon-line"></div>
+                    </div>
+                    <div class="horizon-crosshair"></div>
+                    <div class="horizon-readout">
+                      <div>P: <span id="val-pitch-deg">12.4°</span></div>
+                      <div>R: <span id="val-roll-deg">-3.1°</span></div>
+                      <div>Y: <span id="val-yaw-deg">8.5°</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- G-Force Vector Ball -->
+                <div class="instrument-box">
+                  <div class="gauge-title">G-FORCE ACCEL (m/s²)</div>
+                  <div class="gball-container">
+                    <div class="gball-ring ring-outer"></div>
+                    <div class="gball-ring ring-inner"></div>
+                    <div id="gball-dot" class="gball-dot"></div>
+                  </div>
+                  <div class="gball-readout">
+                    <span>Ax: <b id="val-ax">0.12</b></span>
+                    <span>Ay: <b id="val-ay">-0.05</b></span>
+                    <span>Az: <b id="val-az">9.81</b></span>
+                  </div>
+                </div>
+
+                <!-- SIH Drift Budget Ring -->
+                <div class="instrument-box">
+                  <div class="gauge-title">SIH BUDGET DRIFT RING</div>
+                  <div class="budget-ring-container">
+                    <svg class="budget-svg" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#1E293B" stroke-width="8"/>
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#DC2626" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="200" stroke-dashoffset="10"/>
+                      <circle id="budget-ring-fill" cx="50" cy="50" r="40" fill="none" stroke="#10B981" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="220" stroke-linecap="round"/>
+                    </svg>
+                    <div class="budget-text">
+                      <span id="val-budget-pct" class="budget-num">2.1%</span>
+                      <span class="budget-sub">&lt; 10.0% BUDGET</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Diagnostics & Shock Triggers -->
+            <div class="card glass-panel">
+              <div class="card-header">
+                <span class="card-title">🛡️ Denoising & Anomaly Status</span>
+              </div>
+              <div class="card-body status-items-grid">
+                <div class="status-card">
+                  <span class="sc-label">POTHOLE SHOCK DETECTOR</span>
+                  <div id="sc-pothole" class="sc-indicator green">NOMINAL (CLEAR ROAD)</div>
+                </div>
+                <div class="status-card">
+                  <span class="sc-label">ZERO-VELOCITY STANDSTILL (ZUPT)</span>
+                  <div id="sc-zupt" class="sc-indicator green">ACTIVE DRIVE</div>
+                </div>
+                <div class="status-card">
+                  <span class="sc-label">HMM OFF-ROAD DETECTOR</span>
+                  <div id="sc-offroad" class="sc-indicator green">HIGHWAY LOCKED</div>
+                </div>
+                <div class="status-card">
+                  <span class="sc-label">DYNAMIC MOUNT AUTO-CALIB</span>
+                  <div id="sc-calib" class="sc-indicator blue">CONVERGED (CONF: 94%)</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 2: 5-TIER ALGORITHM BENCHMARK -->
+      <!-- ========================================================================= -->
+      <section id="tab-benchmark" class="tab-pane">
+        <div class="benchmark-grid">
+          
+          <!-- Trajectory & Error Curves Chart Card -->
+          <div class="card glass-panel chart-panel">
+            <div class="card-header">
+              <span class="card-title">📈 5-Tier Algorithmic Performance vs SIH26168 Target (< 10% Drift)</span>
+              <span class="badge-dataset">IO-VNBD Dataset</span>
+            </div>
+            <div class="card-body">
+              <div class="charts-dual">
+                <div class="chart-box">
+                  <h4>Position Error Growth over Time (m)</h4>
+                  <canvas id="chart-error-growth"></canvas>
+                </div>
+                <div class="chart-box">
+                  <h4>Final Drift Percentage (% of Distance Travelled)</h4>
+                  <canvas id="chart-drift-bar"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Benchmark Scorecard Table -->
+          <div class="card glass-panel table-panel">
+            <div class="card-header">
+              <span class="card-title">🏆 Quantitative Comparison Scorecard</span>
+            </div>
+            <div class="card-body">
+              <table class="benchmark-table">
+                <thead>
+                  <tr>
+                    <th>Navigation Tier</th>
+                    <th>Distance</th>
+                    <th>Final Error</th>
+                    <th>ATE RMSE</th>
+                    <th>Drift %</th>
+                    <th>Latency / Step</th>
+                    <th>SIH Target</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="fail-row">
+                    <td><span class="badge-tier tier-1">Tier 1</span> Raw IMU Double Integration</td>
+                    <td>767 m</td>
+                    <td>228.15 m</td>
+                    <td>108.97 m</td>
+                    <td class="drift-bad">29.75%</td>
+                    <td>0.08 ms</td>
+                    <td><span class="status-tag tag-fail">FAILED (&gt;10%)</span></td>
+                  </tr>
+                  <tr class="fail-row">
+                    <td><span class="badge-tier tier-2">Tier 2</span> Standard EKF (No AI)</td>
+                    <td>767 m</td>
+                    <td>212.83 m</td>
+                    <td>101.40 m</td>
+                    <td class="drift-bad">27.75%</td>
+                    <td>0.45 ms</td>
+                    <td><span class="status-tag tag-fail">FAILED (&gt;10%)</span></td>
+                  </tr>
+                  <tr class="pass-row">
+                    <td><span class="badge-tier tier-3">Tier 3</span> AI Velocity-Aided UKF (TCN)</td>
+                    <td>767 m</td>
+                    <td>16.16 m</td>
+                    <td>22.50 m</td>
+                    <td class="drift-good">2.11%</td>
+                    <td>1.82 ms</td>
+                    <td><span class="status-tag tag-pass">PASSED</span></td>
+                  </tr>
+                  <tr class="pass-row highlight-row">
+                    <td><span class="badge-tier tier-4">Tier 4</span> NavResilient UKF + AI Residual Drift Net</td>
+                    <td>767 m</td>
+                    <td>14.82 m</td>
+                    <td>19.40 m</td>
+                    <td class="drift-good">1.93%</td>
+                    <td>2.15 ms</td>
+                    <td><span class="status-tag tag-pass">PASSED</span></td>
+                  </tr>
+                  <tr class="pass-row optimal-row">
+                    <td><span class="badge-tier tier-5">Tier 5</span> NavResilient + HMM Road Map-Matching</td>
+                    <td>767 m</td>
+                    <td>15.79 m</td>
+                    <td>21.90 m</td>
+                    <td class="drift-good">2.06%</td>
+                    <td>3.82 ms</td>
+                    <td><span class="status-tag tag-optimal">OPTIMAL LOCK</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 3: AI NEURAL NETS & TRAINING -->
+      <!-- ========================================================================= -->
+      <section id="tab-models" class="tab-pane">
+        <div class="models-grid">
+          
+          <!-- Model 1: TCN Velocity -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <span class="card-title">🧠 Model 1: 1D-TCN Forward Velocity & Uncertainty Regressor</span>
+              <span class="param-badge">8,466 Parameters (33.1 KB)</span>
+            </div>
+            <div class="card-body">
+              <p class="model-desc">
+                Regresses forward longitudinal velocity $\hat{v}_x \ge 0$ and aleatoric measurement uncertainty $\sigma_v^2$ from 2.0s 6-axis IMU windows without requiring OBD-II or wheel sensors.
+              </p>
+
+              <div class="stats-row">
+                <div class="stat-pill">
+                  <span class="lbl">MAE (IO-VNBD)</span>
+                  <span class="val">0.709 m/s (2.55 km/h)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">RMSE</span>
+                  <span class="val">0.895 m/s (3.22 km/h)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">Inference Latency</span>
+                  <span class="val">0.688 ms (1,452 Hz)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">Mobile Export</span>
+                  <span class="val">TorchScript / LiteRT</span>
+                </div>
+              </div>
+
+              <!-- Interactive Live Forward Pass Tester -->
+              <div class="interactive-tester">
+                <h4>Interactive Live Neural Inference Sandbox:</h4>
+                <div class="sliders-grid">
+                  <div class="slider-group">
+                    <label>Longitudinal Accel (Ax): <span id="val-tst-ax">1.5 m/s²</span></label>
+                    <input type="range" id="tst-ax" min="-5" max="5" step="0.1" value="1.5" class="slider">
+                  </div>
+                  <div class="slider-group">
+                    <label>Yaw Rate (Gz): <span id="val-tst-gz">0.05 rad/s</span></label>
+                    <input type="range" id="tst-gz" min="-1" max="1" step="0.01" value="0.05" class="slider">
+                  </div>
+                </div>
+                <div class="inference-output-box">
+                  <div class="inf-item">Predicted Forward Speed: <b id="inf-pred-speed">15.2 m/s (54.7 km/h)</b></div>
+                  <div class="inf-item">Uncertainty (σv²): <b id="inf-pred-var">0.18 m²/s²</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Model 2: AI Residual Drift Net -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <span class="card-title">⚡ Model 2: AI Residual Drift Compensator (1D-CNN)</span>
+              <span class="param-badge">11,811 Parameters (46.2 KB)</span>
+            </div>
+            <div class="card-body">
+              <p class="model-desc">
+                Learns non-linear kinematic residuals $[dx, dy, dv]$ that the classical UKF leaves uncorrected during extended blackout periods, canceling cumulative drift before map matching.
+              </p>
+
+              <div class="stats-row">
+                <div class="stat-pill">
+                  <span class="lbl">Validation Loss</span>
+                  <span class="val">193.87 (Converged)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">Input Tensor</span>
+                  <span class="val">(Batch, 8, 10)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">Inference Latency</span>
+                  <span class="val">0.380 ms (&gt; 2,500 Hz)</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="lbl">Saved Model</span>
+                  <span class="val">ai_residual_net.pt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 4: SENSORS, VIBRATION & CALIBRATION -->
+      <!-- ========================================================================= -->
+      <section id="tab-sensors" class="tab-pane">
+        <div class="sensors-grid">
+          
+          <!-- Live Oscilloscope -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <span class="card-title">📈 6-DoF Live Waveform Oscilloscope (10 Hz IMU Stream)</span>
+            </div>
+            <div class="card-body">
+              <div class="osc-container">
+                <canvas id="chart-oscilloscope"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Butterworth Vibration Separation -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <span class="card-title">🔬 Butterworth Kinematic Separation (&lt; 2.5 Hz Low-Pass)</span>
+            </div>
+            <div class="card-body">
+              <p class="desc">
+                Smartphones placed in vehicle phone holders experience high-frequency engine vibration (15–40 Hz) and potholes (&gt;30 m/s²). A dual-stage Butterworth low-pass filter cleanly isolates vehicle kinematics from chassis vibrations.
+              </p>
+              <div class="freq-diagram">
+                <div class="freq-band band-pass">
+                  <span class="band-tag">0 Hz – 2.5 Hz (PASS)</span>
+                  <span>Vehicle Acceleration & Braking Dynamics</span>
+                </div>
+                <div class="freq-band band-reject">
+                  <span class="band-tag">&gt; 2.5 Hz (REJECT / NOTCH)</span>
+                  <span>Engine RPM Rumble, AC Compressor, Road Texture</span>
+                </div>
+                <div class="freq-band band-shock">
+                  <span class="band-tag">&gt; 25 m/s² SPIKE (ISOLATE)</span>
+                  <span>Potholes & Speed Bumps (Flagged as Non-Navigation)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 5: EDGE API & INTEGRATION TERMINAL -->
+      <!-- ========================================================================= -->
+      <section id="tab-edge" class="tab-pane">
+        <div class="edge-grid">
+          
+          <!-- Live Terminal Output -->
+          <div class="card glass-panel terminal-panel">
+            <div class="card-header">
+              <span class="card-title">📟 Live JSON Line Streaming Terminal (Engineer B Integration)</span>
+              <button id="btn-clear-term" class="btn-sm">Clear Terminal</button>
+            </div>
+            <div class="card-body">
+              <pre id="terminal-stream" class="terminal-box"></pre>
+            </div>
+          </div>
+
+          <!-- Code Generator Snippets -->
+          <div class="card glass-panel">
+            <div class="card-header">
+              <span class="card-title">💻 Client Integration Code (One-Click Copy)</span>
+            </div>
+            <div class="card-body">
+              <div class="code-tabs">
+                <button class="code-tab active" data-lang="python">Python</button>
+                <button class="code-tab" data-lang="flutter">Flutter / Dart</button>
+                <button class="code-tab" data-lang="cpp">C++ (POSIX)</button>
+              </div>
+              <pre id="code-snippet" class="code-box"><code># Connect to NavResilient Standalone TCP Socket on Port 9090
+import socket, json
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("127.0.0.1", 9090))
+sock_file = sock.makefile("r", encoding="utf-8")
+
+# Push High-Rate IMU Frame (10 Hz up to 200 Hz)
+frame = {
+    "type": "IMU", "timestamp_s": 10.2,
+    "ax_mps2": 0.15, "ay_mps2": 0.0, "az_mps2": 9.81,
+    "gx_rads": 0.0, "gy_rads": 0.0, "gz_rads": 0.02
+}
+sock.sendall((json.dumps(frame) + "\n").encode("utf-8"))
+
+# Read back real-time DriftCorrectedState
+state_json = sock_file.readline()
+state = json.loads(state_json)
+print(f"Lat: {state['latitude']}, Lon: {state['longitude']}, Drift: {state['drift_pct']}%")</code></pre>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "navresilient"
+version = "1.0.0"
+description = "AI-Aided Resilient GNSS/INS Navigation Engine for Smartphone & Edge Deployment (SIH26168 / ISRO)"
+authors = [{ name = "NavResilient Team", email = "engineer-a@navresilient.isro" }]
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+    "numpy==1.26.4",
+    "scipy==1.15.3",
+    "pandas==2.2.1",
+    "torch==2.7.1",
+    "filterpy==1.4.5",
+    "networkx==3.5",
+    "matplotlib==3.8.3"
+]
+
+[project.optional-dependencies]
+edge = [
+    "onnx>=1.16.0",
+    "litert-torch>=0.9.0",
+    "ai-edge-litert>=2.2.0"
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

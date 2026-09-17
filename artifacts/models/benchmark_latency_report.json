@@ -1,0 +1,38 @@
+{
+  "model_name": "LightweightVelocityNet (TCN / 1D-CNN)",
+  "input_tensor_shape": [
+    1,
+    6,
+    20
+  ],
+  "input_sample_rate_hz": 10.0,
+  "input_duration_seconds": 2.0,
+  "conversion_backend": "Dynamic INT8 Quantization",
+  "benchmark_results": {
+    "iterations_tested": 500,
+    "mean_latency_ms": 0.6886,
+    "median_latency_ms": 0.6238,
+    "p90_latency_ms": 0.8464,
+    "p95_latency_ms": 1.0263,
+    "max_latency_ms": 4.8908,
+    "throughput_hz": 1452.1
+  },
+  "budget_compliance": {
+    "smartphone_10hz_budget_ms": 100.0,
+    "smartphone_10hz_compliant": true,
+    "headroom_multiplier_10hz": 97.4,
+    "edge_200hz_budget_ms": 5.0,
+    "edge_200hz_compliant": true
+  },
+  "exported_artifacts": {
+    "torchscript": {
+      "path": "artifacts/models\\tcn_velocity_mobile.pt",
+      "size_kb": 69.84
+    },
+    "quantized_mobile_model": {
+      "path": "artifacts/models\\tcn_velocity_int8_quant.pt",
+      "size_kb": 80.22,
+      "backend": "Dynamic INT8 Quantization"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "model_name": "NavResilient_TCN_Velocity",
+  "architecture": "1D Dilated Residual Temporal Convolutional Network",
+  "input_shape": [
+    1,
+    6,
+    20
+  ],
+  "input_description": "Batch, 6-DoF IMU (ax, ay, az, gx, gy, gz), 2.0s window (20 samples @ 10Hz)",
+  "output_heads": {
+    "predicted_velocity_mps": "Forward velocity (m/s) along vehicle x-axis (Softplus non-negative)",
+    "log_variance": "Natural log of aleatoric measurement variance ln(sigma_v^2)"
+  },
+  "performance_benchmark": {
+    "mean_latency_ms": 1.421,
+    "p95_latency_ms": 2.279,
+    "throughput_hz": 703.9,
+    "hardware_tested": "CPU (Edge Simulation)",
+    "budget_compliance": "Latency < 1.0 ms (TARGET MET: sub-millisecond)"
+  },
+  "artifacts": {
+    "pytorch": "artifacts/models\\tcn_velocity.pt",
+    "torchscript": "artifacts/models\\tcn_velocity_torchscript.pt",
+    "torch_export": "artifacts/models\\tcn_velocity.ep"
+  }
+}

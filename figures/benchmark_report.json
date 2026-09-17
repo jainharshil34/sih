@@ -1,0 +1,62 @@
+{
+  "benchmark_timestamp": "2026-09-11T21:38:53Z",
+  "target_drift_budget_pct": 10.0,
+  "scenarios": [
+    {
+      "scenario": "1 km Highway Tunnel (60 km/h)",
+      "outage_seconds": 60.0,
+      "distance_m": 766.97,
+      "raw_imu_drift_pct": 29.44,
+      "raw_imu_final_error_m": 225.83,
+      "standard_ekf_drift_pct": 26.94,
+      "standard_ekf_final_error_m": 206.66,
+      "ai_esekf_drift_pct": 2.51,
+      "ai_esekf_final_error_m": 19.26,
+      "map_matched_drift_pct": 2.51,
+      "map_matched_final_error_m": 19.22,
+      "passed_sih_budget": true
+    },
+    {
+      "scenario": "Short Urban Underpass (40 km/h)",
+      "outage_seconds": 15.0,
+      "distance_m": 230.69,
+      "raw_imu_drift_pct": 7.47,
+      "raw_imu_final_error_m": 17.23,
+      "standard_ekf_drift_pct": 6.42,
+      "standard_ekf_final_error_m": 14.82,
+      "ai_esekf_drift_pct": 6.07,
+      "ai_esekf_final_error_m": 14.0,
+      "map_matched_drift_pct": 6.07,
+      "map_matched_final_error_m": 13.99,
+      "passed_sih_budget": true
+    },
+    {
+      "scenario": "Urban Canyon + Junction Stop",
+      "outage_seconds": 40.0,
+      "distance_m": 433.75,
+      "raw_imu_drift_pct": 1.85,
+      "raw_imu_final_error_m": 8.03,
+      "standard_ekf_drift_pct": 58.82,
+      "standard_ekf_final_error_m": 255.15,
+      "ai_esekf_drift_pct": 1.38,
+      "ai_esekf_final_error_m": 6.0,
+      "map_matched_drift_pct": 0.66,
+      "map_matched_final_error_m": 2.87,
+      "passed_sih_budget": true
+    },
+    {
+      "scenario": "Extended Denied Segment (80 s)",
+      "outage_seconds": 80.0,
+      "distance_m": 1099.69,
+      "raw_imu_drift_pct": 17.62,
+      "raw_imu_final_error_m": 193.77,
+      "standard_ekf_drift_pct": 15.31,
+      "standard_ekf_final_error_m": 168.37,
+      "ai_esekf_drift_pct": 4.42,
+      "ai_esekf_final_error_m": 48.6,
+      "map_matched_drift_pct": 4.42,
+      "map_matched_final_error_m": 48.6,
+      "passed_sih_budget": true
+    }
+  ]
+}
