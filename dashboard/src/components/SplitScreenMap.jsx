@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { ShieldAlert, Zap, CheckCircle2, LocateFixed } from 'lucide-react';
+import { ShieldAlert, Zap, CheckCircle2, LocateFixed, Layers } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -45,6 +45,49 @@ function createPinIcon(color = '#f59e0b', label = '') {
   });
 }
 
+export const OSM_THEMES = [
+  {
+    id: 'voyager',
+    name: 'OSM Voyager (Crisp HD)',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxZoom: 20,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  },
+  {
+    id: 'dark',
+    name: 'OSM Dark Cockpit',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: ['a', 'b', 'c', 'd'],
+    maxZoom: 20,
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  },
+  {
+    id: 'hot',
+    name: 'OSM Detailed (HOT)',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  },
+  {
+    id: 'standard',
+    name: 'OSM Standard',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  },
+  {
+    id: 'satellite',
+    name: 'Satellite Hybrid',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    subdomains: ['a', 'b', 'c'],
+    maxZoom: 19,
+    attribution: '&copy; Esri &mdash; High-Res Satellite',
+  },
+];
+
 export default function SplitScreenMap({
   currentPoint,
   history,
@@ -58,6 +101,10 @@ export default function SplitScreenMap({
 
   const leftMapRef = useRef(null);
   const rightMapRef = useRef(null);
+  const leftTileRef = useRef(null);
+  const rightTileRef = useRef(null);
+
+  const [activeTheme, setActiveTheme] = useState('voyager');
 
   // Layer references for high-performance direct Leaflet updates (60fps)
   const leftLayersRef = useRef({
@@ -84,6 +131,36 @@ export default function SplitScreenMap({
   const refLat = selectedDrive?.ref_lat || 52.4068;
   const refLon = selectedDrive?.ref_lon || -1.5065;
 
+  // Function to create a tile layer for a given theme
+  const createTileLayer = (themeId) => {
+    const theme = OSM_THEMES.find(t => t.id === themeId) || OSM_THEMES[0];
+    return L.tileLayer(theme.url, {
+      subdomains: theme.subdomains,
+      maxZoom: theme.maxZoom,
+      detectRetina: true,
+      crossOrigin: true,
+      keepBuffer: 6,
+      updateWhenZooming: true,
+      attribution: theme.attribution,
+    });
+  };
+
+  // Change base tile layer dynamically when theme changes
+  useEffect(() => {
+    if (leftMapRef.current && leftTileRef.current) {
+      leftMapRef.current.removeLayer(leftTileRef.current);
+      const newLeftTile = createTileLayer(activeTheme).addTo(leftMapRef.current);
+      newLeftTile.bringToBack();
+      leftTileRef.current = newLeftTile;
+    }
+    if (rightMapRef.current && rightTileRef.current) {
+      rightMapRef.current.removeLayer(rightTileRef.current);
+      const newRightTile = createTileLayer(activeTheme).addTo(rightMapRef.current);
+      newRightTile.bringToBack();
+      rightTileRef.current = newRightTile;
+    }
+  }, [activeTheme]);
+
   // Initialize both Leaflet Maps once
   useEffect(() => {
     if (!leftContainerRef.current || !rightContainerRef.current) return;
@@ -101,7 +178,7 @@ export default function SplitScreenMap({
       zoomControl: false,
       attributionControl: false,
       preferCanvas: true,
-      maxZoom: 19,
+      maxZoom: 20,
       minZoom: 12,
     };
 
@@ -111,28 +188,14 @@ export default function SplitScreenMap({
     leftMapRef.current = leftMap;
     rightMapRef.current = rightMap;
 
-    // Tile Layer: Standard OpenStreetMap (100% Free, Official, No API Key Required)
-    const primaryTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const fallbackTileUrl = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
-    const tileOptions = {
-      subdomains: ['a', 'b', 'c'],
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      crossOrigin: true,
-    };
+    // Attach Initial Tile Layers
+    const leftTile = createTileLayer(activeTheme).addTo(leftMap);
+    leftTile.bringToBack();
+    leftTileRef.current = leftTile;
 
-    const addReliableTileLayer = (map) => {
-      const layer = L.tileLayer(primaryTileUrl, tileOptions);
-      layer.on('tileerror', (error) => {
-        if (error.tile && error.tile.src && !error.tile.src.includes('openstreetmap.fr')) {
-          error.tile.src = error.tile.src.replace('tile.openstreetmap.org', 'tile.openstreetmap.fr/hot');
-        }
-      });
-      layer.addTo(map);
-    };
-
-    addReliableTileLayer(leftMap);
-    addReliableTileLayer(rightMap);
+    const rightTile = createTileLayer(activeTheme).addTo(rightMap);
+    rightTile.bringToBack();
+    rightTileRef.current = rightTile;
 
     // Synchronize pan & zoom between both maps on user interactions (drag & zoom)
     let isUserInteracting = false;
@@ -282,16 +345,18 @@ export default function SplitScreenMap({
       {/* LEFT PANEL: Raw GNSS-Only Track */}
       <div className="relative flex flex-col rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 z-10">
+        <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200 z-10">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${isOutage ? 'bg-rose-500 animate-ping' : 'bg-slate-400'}`} />
             <h3 className="font-['Space_Grotesk'] text-xs font-bold tracking-wide text-slate-800 uppercase">
               Raw GNSS-Only Track (Unaugmented)
             </h3>
           </div>
-          <span className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${isOutage ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-slate-100 text-slate-600'}`}>
-            {isOutage ? 'BLACKOUT: SIGNAL FROZEN' : 'LOCK ACTIVE'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${isOutage ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-slate-100 text-slate-600'}`}>
+              {isOutage ? 'BLACKOUT: SIGNAL FROZEN' : 'LOCK ACTIVE'}
+            </span>
+          </div>
         </div>
 
         {/* Viewport Map Container */}
@@ -326,17 +391,36 @@ export default function SplitScreenMap({
       {/* RIGHT PANEL: NavResilient AI-Fused + Map-Matched Track */}
       <div className="relative flex flex-col rounded-2xl bg-white border border-sky-300 overflow-hidden shadow-sm">
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-sky-50/70 border-b border-sky-200 z-10">
+        <div className="flex items-center justify-between px-4 py-2 bg-sky-50/70 border-b border-sky-200 z-10">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 shadow-sm shadow-emerald-500/40 animate-pulse" />
             <h3 className="font-['Space_Grotesk'] text-xs font-bold tracking-wide text-sky-950 uppercase">
               NavResilient AI-Fused Track (TCN + UKF + HMM)
             </h3>
           </div>
-          <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-            <CheckCircle2 className="w-3 h-3" />
-            DRIFT: {driftPct.toFixed(2)}% (&lt; 10% TARGET)
-          </span>
+          <div className="flex items-center gap-2">
+            {/* OSM Layer Selector Dropdown */}
+            <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm border border-sky-200 rounded-lg p-0.5 shadow-xs">
+              <Layers className="w-3 h-3 text-sky-600 ml-1.5" />
+              <select
+                value={activeTheme}
+                onChange={(e) => setActiveTheme(e.target.value)}
+                className="text-[10px] font-medium text-slate-700 bg-transparent border-0 py-0.5 pl-1 pr-5 focus:ring-0 focus:outline-hidden cursor-pointer"
+                title="Select OpenStreetMap Map Layer Style"
+              >
+                {OSM_THEMES.map(theme => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <CheckCircle2 className="w-3 h-3" />
+              DRIFT: {driftPct.toFixed(2)}% (&lt; 10%)
+            </span>
+          </div>
         </div>
 
         {/* Viewport Map Container */}
@@ -376,7 +460,7 @@ export default function SplitScreenMap({
             <button
               onClick={handleRecenter}
               title="Recenter Camera on Vehicle"
-              className="p-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-white/10 shadow-md transition-colors"
+              className="p-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-white/10 shadow-md transition-colors cursor-pointer"
             >
               <LocateFixed className="w-4 h-4" />
             </button>
