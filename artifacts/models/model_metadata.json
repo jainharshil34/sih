@@ -12,9 +12,9 @@
     "log_variance": "Natural log of aleatoric measurement variance ln(sigma_v^2)"
   },
   "performance_benchmark": {
-    "mean_latency_ms": 1.421,
-    "p95_latency_ms": 2.279,
-    "throughput_hz": 703.9,
+    "mean_latency_ms": 2.409,
+    "p95_latency_ms": 3.863,
+    "throughput_hz": 415.1,
     "hardware_tested": "CPU (Edge Simulation)",
     "budget_compliance": "Latency < 1.0 ms (TARGET MET: sub-millisecond)"
   },

@@ -36,6 +36,7 @@ class MatchResult:
     heading_error_deg: float         # Discrepancy between road bearing and trajectory
     confidence: float                # Match confidence [0.0, 1.0]
     is_off_road: bool                # True when in underground structure or open lot
+    road_bearing_rad: float = 0.0    # Direction of matched road segment in radians
 
 
 class HMMMapMatcher:
@@ -135,7 +136,8 @@ class HMMMapMatcher:
                 cross_track_dist_m=0.0,
                 heading_error_deg=0.0,
                 confidence=0.0,
-                is_off_road=True
+                is_off_road=True,
+                road_bearing_rad=heading_rad
             )
 
         self.off_road_mode = False
@@ -189,6 +191,15 @@ class HMMMapMatcher:
         # High confidence snaps closely to centerline; low confidence softly blends
         snapped = (1.0 - conf) * raw_2d + conf * best_cand["proj"]
 
+        # Compute directed road bearing in vehicle forward direction
+        best_edge = best_cand["edge"]
+        d_h1 = abs((heading_rad - best_edge.bearing_rad + math.pi) % (2.0 * math.pi) - math.pi)
+        d_h2 = abs((heading_rad - (best_edge.bearing_rad + math.pi) + math.pi) % (2.0 * math.pi) - math.pi)
+        if not best_edge.one_way and d_h2 < d_h1:
+            directed_bearing = (best_edge.bearing_rad + math.pi) % (2.0 * math.pi)
+        else:
+            directed_bearing = best_edge.bearing_rad
+
         return MatchResult(
             snapped_pos=snapped,
             raw_pos=raw_2d,
@@ -198,5 +209,6 @@ class HMMMapMatcher:
             cross_track_dist_m=raw_dist,
             heading_error_deg=float(math.degrees(best_cand["head_diff_rad"])),
             confidence=conf,
-            is_off_road=False
+            is_off_road=False,
+            road_bearing_rad=directed_bearing
         )

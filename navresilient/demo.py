@@ -59,13 +59,15 @@ def synthetic_drive(out_dir: str, minutes: float = 4.0, seed: int = 7) -> str:
 
     df = pd.DataFrame({
         HEADER[0]: lat, HEADER[1]: lon, HEADER[2]: 80.0,
-        HEADER[3]: v_gps * 3.6, HEADER[4]: 4.0,
+        HEADER[3]: v_gps, HEADER[4]: 4.0,
         HEADER[5]: np.degrees(heading[hold]) % 360, HEADER[6]: 9,
         HEADER[7]: t * 1000.0, HEADER[8]: "2026-01-01 00-00-00_000",
         HEADER[9]: acc[:, 0], HEADER[10]: acc[:, 1], HEADER[11]: acc[:, 2],
         HEADER[12]: grav[:, 0], HEADER[13]: grav[:, 1], HEADER[14]: grav[:, 2],
         HEADER[15]: gyro[:, 0], HEADER[16]: gyro[:, 1], HEADER[17]: gyro[:, 2],
-        HEADER[18]: 20.0, HEADER[19]: -3.0, HEADER[20]: 42.0,
+        HEADER[18]: 20.0 * np.cos(heading) + rng.normal(0, 0.5, n),
+        HEADER[19]: -20.0 * np.sin(heading) + rng.normal(0, 0.5, n),
+        HEADER[20]: 42.0 + rng.normal(0, 0.5, n),
         HEADER[21]: np.degrees(heading) % 360, HEADER[22]: -2.0, HEADER[23]: 1.0,
     })
     os.makedirs(out_dir, exist_ok=True)

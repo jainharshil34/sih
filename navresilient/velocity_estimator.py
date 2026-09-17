@@ -22,62 +22,10 @@ import torch.optim as optim
 
 from .demo import synthetic_drive
 from .io_vnbd_loader import load_smartphone_drive, load_vehicle_drive
+from .models.tcn_velocity import TCNVelocityNet
 
-
-class LightweightVelocityNet(nn.Module):
-    """Compact 1D-CNN / Temporal ConvNet designed for sub-millisecond on-device execution.
-    
-    Total parameters: ~12,500 (< 55 KB unquantized, < 15 KB INT8 quantized).
-    Input: (Batch, 6, 20) -> 6-DoF IMU window of 2.0s at 10 Hz.
-    Output:
-      - velocity: (Batch, 1) forward speed in m/s (Softplus positive constraint)
-      - log_var: (Batch, 1) log aleatoric measurement variance ln(sigma_v^2)
-    """
-
-    def __init__(self, in_channels: int = 6, hidden_dim: int = 24):
-        super().__init__()
-        
-        # Layer 1: Temporal receptive field expansion
-        self.conv1 = nn.Conv1d(in_channels, hidden_dim, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm1d(hidden_dim)
-        self.relu1 = nn.ReLU()
-        
-        # Layer 2: Dilated convolution for multi-scale context
-        self.conv2 = nn.Conv1d(hidden_dim, hidden_dim * 2, kernel_size=3, padding=2, dilation=2)
-        self.bn2 = nn.BatchNorm1d(hidden_dim * 2)
-        self.relu2 = nn.ReLU()
-
-        # Layer 3: Feature consolidation
-        self.conv3 = nn.Conv1d(hidden_dim * 2, hidden_dim, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm1d(hidden_dim)
-        self.relu3 = nn.ReLU()
-
-        self.pool = nn.AdaptiveAvgPool1d(1)
-
-        # Dual Heads
-        self.fc_vel = nn.Sequential(
-            nn.Linear(hidden_dim, 16),
-            nn.ReLU(),
-            nn.Linear(16, 1),
-            nn.Softplus()  # Forward velocity cannot be negative
-        )
-
-        self.fc_var = nn.Sequential(
-            nn.Linear(hidden_dim, 16),
-            nn.ReLU(),
-            nn.Linear(16, 1)
-        )
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Stateless, torch.export-compliant forward graph
-        h = self.relu1(self.bn1(self.conv1(x)))
-        h = self.relu2(self.bn2(self.conv2(h)))
-        h = self.relu3(self.bn3(self.conv3(h)))
-        pooled = self.pool(h).squeeze(-1)
-        
-        vel = self.fc_vel(pooled)
-        log_var = torch.clamp(self.fc_var(pooled), min=-4.6, max=3.0)  # variance in [0.01, 20.0]
-        return vel, log_var
+# Canonical unification: LightweightVelocityNet is an alias of TCNVelocityNet
+LightweightVelocityNet = TCNVelocityNet
 
 
 def prepare_dataset(acc_v: np.ndarray, gyro_v: np.ndarray, speed_target: np.ndarray,

@@ -1,0 +1,14 @@
+{
+  "dataset_drive": "S-DEMO-SYNTHETIC",
+  "outage_duration_s": 40.0,
+  "distance_traveled_m": 661.24,
+  "final_drift_error_m": 70.82,
+  "max_drift_error_m": 87.84,
+  "ate_rmse_m": 52.67,
+  "drift_percentage": 10.71,
+  "map_matched_drift_pct": 11.02,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": false,
+  "mean_latency_ms": 145.838,
+  "p95_latency_ms": 546.732
+}

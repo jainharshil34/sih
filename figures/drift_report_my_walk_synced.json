@@ -1,0 +1,14 @@
+{
+  "dataset_drive": "my_walk_synced",
+  "outage_duration_s": 40.0,
+  "distance_traveled_m": 44.12,
+  "final_drift_error_m": 0.45,
+  "max_drift_error_m": 0.45,
+  "ate_rmse_m": 0.38,
+  "drift_percentage": 1.02,
+  "map_matched_drift_pct": 0.28,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": true,
+  "mean_latency_ms": 6.508,
+  "p95_latency_ms": 9.126
+}

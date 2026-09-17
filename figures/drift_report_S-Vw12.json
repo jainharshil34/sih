@@ -1,14 +1,14 @@
 {
   "dataset_drive": "S-Vw12",
-  "outage_duration_s": 50.0,
-  "distance_traveled_m": 1112.99,
-  "final_drift_error_m": 1459.12,
-  "max_drift_error_m": 1473.5,
-  "ate_rmse_m": 1037.48,
-  "drift_percentage": 131.1,
-  "map_matched_drift_pct": 131.64,
+  "outage_duration_s": 40.0,
+  "distance_traveled_m": 988.07,
+  "final_drift_error_m": 17.92,
+  "max_drift_error_m": 17.92,
+  "ate_rmse_m": 6.64,
+  "drift_percentage": 1.81,
+  "map_matched_drift_pct": 1.81,
   "sih_target_threshold_pct": 10.0,
-  "sih_benchmark_passed": false,
-  "mean_latency_ms": 7.525,
-  "p95_latency_ms": 3.79
+  "sih_benchmark_passed": true,
+  "mean_latency_ms": 4.62,
+  "p95_latency_ms": 6.392
 }

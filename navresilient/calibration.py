@@ -49,6 +49,8 @@ class DynamicMountCalibrator:
         self.pitch = 0.0
         self.roll = 0.0
         self.yaw = 0.0
+        self.gyro_sign = 1.0
+        self.gyro_bias = 0.0
         self.R_mount = np.eye(3, dtype=float)
         self.tilt_calibrated = False
         self.yaw_calibrated = False
@@ -94,17 +96,11 @@ class DynamicMountCalibrator:
         return pitch, roll, R_level
 
     def estimate_yaw_alignment(self, acc_level: np.ndarray, gps_speed: np.ndarray) -> Tuple[float, float]:
-        """Stage 2: Estimate Heading Offset (Yaw) by correlating horizontal acceleration with GNSS speed derivative.
-        
-        Forward acceleration is the only horizontal body component correlated with dv/dt.
-        Closed-form solution: psi = atan2(dot(ay, dv), dot(ax, dv)).
-        """
+        """Stage 2: Estimate Heading Offset (Yaw) by correlating horizontal acceleration with GNSS speed derivative."""
         dv = np.gradient(gps_speed) * self.fs
-        # Mask near-constant speed where correlation carries no signal
         valid = np.isfinite(dv) & (np.abs(dv) > self.min_accel_for_yaw)
 
-        if valid.sum() < int(2.5 * self.fs):
-            # Not enough acceleration excitation yet (e.g. car cruising constant on highway)
+        if valid.sum() < int(1.5 * self.fs):
             return 0.0, 0.0
 
         ax = acc_level[valid, 0]
@@ -115,44 +111,84 @@ class DynamicMountCalibrator:
         dot_y = float(np.dot(ay, dv_valid))
 
         yaw = float(math.atan2(dot_y, dot_x))
-        correlation_mag = math.hypot(dot_x, dot_y) / (np.linalg.norm(dv_valid) ** 2 + 1e-6)
-        confidence = min(1.0, float(correlation_mag * 1.5))
+        denom = (np.linalg.norm(dv_valid) * np.linalg.norm(np.hypot(ax, ay)) + 1e-6)
+        confidence = min(1.0, float(math.hypot(dot_x, dot_y) / denom))
 
         self.yaw = yaw
-        self.yaw_calibrated = True
+        self.yaw_calibrated = (confidence >= 0.25)
         return yaw, confidence
 
     def calibrate(self, acc_raw: np.ndarray, gyro_raw: np.ndarray,
-                  gps_speed: np.ndarray) -> MountOrientation:
+                  gps_speed: np.ndarray,
+                  gps_course_rad: Optional[np.ndarray] = None) -> MountOrientation:
         """Execute full dynamic calibration pipeline."""
         # 1. Pitch & Roll
         pitch, roll, R_level = self.estimate_tilt_from_gravity(acc_raw)
 
-        # Level accelerations
+        # Level accelerations & angular rates
         a_level = acc_raw @ R_level.T
+        w_level = gyro_raw @ R_level.T
         
-        # 2. Yaw offset
+        # 2. Yaw offset (only apply if correlation confidence is high enough and within plausible forward mount)
         yaw, conf = self.estimate_yaw_alignment(a_level, gps_speed)
+        effective_yaw = yaw if (conf >= 0.70 and abs(yaw) < math.pi / 3.0) else 0.0
 
-        # 3. Full 3D Phone-to-Vehicle Rotation Matrix: R_mount = R_z(yaw) @ R_level
-        cy, sy = math.cos(-yaw), math.sin(-yaw)
+        # 3. Gyroscope sign and bias dynamic alignment against GNSS course
+        if gps_course_rad is not None and len(gps_course_rad) >= 10:
+            crs_arr = np.unwrap(gps_course_rad)
+            # Smooth 1Hz staircase GNSS course to compute true angular rate
+            change_idx = np.where(np.diff(crs_arr) != 0)[0] + 1
+            if len(change_idx) >= 2:
+                anchors = np.unique(np.concatenate([[0], change_idx, [len(crs_arr) - 1]]))
+                t_idx = np.arange(len(crs_arr))
+                crs_smooth = np.interp(t_idx, anchors, crs_arr[anchors])
+                w_gnss = np.gradient(crs_smooth) * self.fs
+            else:
+                w_gnss = np.gradient(crs_arr) * self.fs
+
+            w_z = w_level[:, 2]
+            
+            # Detect turning sign correlation during significant turns (|w_gnss| > 0.04 rad/s)
+            turning_mask = (np.abs(w_gnss) > 0.04) & np.isfinite(w_z)
+            if np.sum(turning_mask) >= 10:
+                gnss_turns = w_gnss[turning_mask]
+                gyro_turns = w_z[turning_mask]
+                denom = (np.linalg.norm(gnss_turns) * np.linalg.norm(gyro_turns) + 1e-6)
+                corr = float(np.dot(gnss_turns, gyro_turns) / denom)
+                if abs(corr) >= 0.35:
+                    self.gyro_sign = 1.0 if corr > 0 else -1.0
+            
+            # Gyro bias: prefer stationary rest (speed < 0.5 m/s), else shrunk dynamic difference
+            spd_arr = gps_speed if gps_speed is not None else np.zeros_like(w_gnss)
+            stop_mask = (spd_arr < 0.5) & np.isfinite(w_z)
+            if np.sum(stop_mask) >= 5:
+                self.gyro_bias = float(np.median(w_z[stop_mask]))
+                self.gyro_bias = float(np.clip(self.gyro_bias, -0.008, 0.008))
+            else:
+                diff = w_z - self.gyro_sign * w_gnss
+                valid_diff = np.isfinite(diff) & (spd_arr > 2.0)
+                if np.sum(valid_diff) >= 5:
+                    # Regularized shrinkage towards 0 to avoid GNSS course gradient noise
+                    self.gyro_bias = float(np.clip(float(np.median(diff[valid_diff])) * 0.15, -0.0025, 0.0025))
+                else:
+                    self.gyro_bias = 0.0
+
+        # 4. Full 3D Phone-to-Vehicle Rotation Matrix: R_mount = R_z(yaw) @ R_level
+        cy, sy = math.cos(-effective_yaw), math.sin(-effective_yaw)
         Rz = np.array([[cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]], dtype=float)
         self.R_mount = Rz @ R_level
 
         return MountOrientation(
             pitch_rad=pitch,
             roll_rad=roll,
-            yaw_rad=yaw,
+            yaw_rad=effective_yaw,
             pitch_deg=math.degrees(pitch),
             roll_deg=math.degrees(roll),
-            yaw_deg=math.degrees(yaw),
+            yaw_deg=math.degrees(effective_yaw),
             R_mount=self.R_mount,
             is_calibrated=self.tilt_calibrated,
             confidence=conf
         )
-
-        # If mount shifted by more than 12 degrees, flag for recalibration
-        return math.degrees(angle_diff) > 12.0
 
     def transform_to_vehicle_frame(self, acc_raw: np.ndarray, gyro_raw: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Apply computed mounting rotation matrix to raw sensor frames and remove Earth gravity."""
@@ -161,6 +197,11 @@ class DynamicMountCalibrator:
         acc_v = acc_v - np.array([0.0, 0.0, G_ACCEL])
         gyro_v = self.R_mount @ gyro_raw
         return acc_v, gyro_v
+
+    def get_calibrated_yaw_rate(self, gyro_veh: np.ndarray) -> float:
+        """Return calibrated geographic heading rate (rad/s, clockwise positive)."""
+        wz = float(gyro_veh[2])
+        return float(self.gyro_sign * (wz - self.gyro_bias))
 
 
 # Export alias

@@ -23,6 +23,7 @@ import numpy as np
 from navresilient.contract import DriftCorrectedState, GNSSFix, IMUFrame, SystemStatus
 from navresilient.engine import NavResilientEngine
 from navresilient.io_vnbd_loader import ParsedDrive, load_smartphone_drive
+from navresilient.mapmatching.graph_loader import OSMGraphLoader
 from navresilient.simulate_gnss_outage import GNSSOutageSimulator
 
 
@@ -45,11 +46,18 @@ def evaluate_engine_drift(
     drive = load_smartphone_drive(s_csv)
     sim = GNSSOutageSimulator(drive, outage_start_s=outage_start_s, outage_duration_s=outage_duration_s)
 
+    # Initialize Road Network Graph along drive corridor
+    graph_loader = OSMGraphLoader.for_drive(drive, step_m=15.0)
+
     # Initialize Engine at drive origin
     engine = NavResilientEngine(
         fs_imu=10.0,
         ref_lat=float(drive.lat[0]),
-        ref_lon=float(drive.lon[0])
+        ref_lon=float(drive.lon[0]),
+        graph_loader=graph_loader,
+        enable_ai_velocity=True,
+        enable_map_matching=True,
+        enable_residual=False,
     )
 
     t_list = []
@@ -144,7 +152,7 @@ def evaluate_engine_drift(
     plot_path = os.path.join(out_dir, f"drift_evaluation_{drive.name}.png")
     _render_presentation_plot(
         seg_t, seg_gt_x, seg_gt_y, seg_est_x, seg_est_y, seg_snapped_x, seg_snapped_y,
-        pos_err, dist_traveled_m, results, plot_path
+        pos_err, dist_traveled_m, results, graph_loader, plot_path
     )
 
     json_path = os.path.join(out_dir, f"drift_report_{drive.name}.json")
@@ -180,12 +188,19 @@ def _render_presentation_plot(
     pos_err: np.ndarray,
     total_dist: float,
     metrics: dict,
+    graph_loader: OSMGraphLoader,
     out_path: str
 ):
     """Renders high-resolution presentation-quality dual panel plot for SIH screening."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6.2), gridspec_kw={"width_ratios": [1.15, 1]})
 
     # --- PANEL 1: Trajectory Plot ---
+    road_plotted = False
+    for edge in graph_loader.edges:
+        label = "Road Network (OSM)" if not road_plotted else None
+        ax1.plot([edge.p1[0], edge.p2[0]], [edge.p1[1], edge.p2[1]], color="#CBD5E1", lw=1.2, ls="-", zorder=2, alpha=0.8, label=label)
+        road_plotted = True
+
     ax1.plot(gt_x, gt_y, color=COLOR_GT, lw=3.2, label="Ground Truth (GNSS/CAN)", zorder=5)
     ax1.plot(est_x, est_y, color=COLOR_EST, lw=2.4, ls="--", label="NavResilient Inferred INS", zorder=6)
     ax1.plot(mm_x, mm_y, color=COLOR_MM, lw=2.0, ls=":", label="Snapped Road Trajectory", zorder=7)

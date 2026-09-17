@@ -127,8 +127,7 @@ class IMUDenoiser:
         """
         acc_clean = self.filter_kinematics_zero_phase(acc_v)
         gyro_clean = self.filter_kinematics_zero_phase(gyro_v)
-
-        # Repair pothole shock indices by clamping to kinematic baseline
+        pothole_mask = self.detect_potholes(acc_v)
         if pothole_mask.any():
             acc_clean = np.where(pothole_mask[:, None], acc_clean, acc_clean)
 

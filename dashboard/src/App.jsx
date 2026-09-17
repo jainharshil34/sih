@@ -268,6 +268,7 @@ export default function App() {
                 isOutage={isOutage}
                 distanceTraveled={totalDistance}
                 driftPct={driftPct}
+                selectedDrive={REAL_DRIVES[selectedDriveId]}
               />
             </div>
 

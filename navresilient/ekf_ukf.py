@@ -92,11 +92,11 @@ class NavResilientUKF:
     def __init__(
         self,
         dt: float = 0.1,
-        q_pos: float = 0.05,
-        q_vel: float = 0.15,
-        q_head: float = 0.015,
+        q_pos: float = 0.01,
+        q_vel: float = 0.05,
+        q_head: float = 0.001,
         q_ba: float = 1e-4,
-        q_bg: float = 1e-5,
+        q_bg: float = 1e-4,
     ):
         self.dt = dt
         self.dim_x = 6
@@ -200,7 +200,8 @@ class NavResilientUKF:
         pos_east: float,
         pos_north: float,
         sigma_pos: float = 2.5,
-        course_rad: Optional[float] = None
+        course_rad: Optional[float] = None,
+        speed_mps: Optional[float] = None
     ) -> bool:
         """Fuse incoming GNSS fix with Mahalanobis innovation check & smooth handoff."""
         z = np.array([pos_east, pos_north], dtype=float)
@@ -220,24 +221,33 @@ class NavResilientUKF:
 
         R = np.eye(2) * (effective_sigma ** 2)
 
-        # Innovation gating (Chi-square 2-DoF 99% threshold = 9.21)
+        # Innovation gating (Chi-square 2-DoF outlier rejection threshold > 150)
         z_pred = hx_pos(self.ukf.x)
         innov = z - z_pred
         S = self.ukf.P[:2, :2] + R
         try:
             d2 = float(innov.T @ np.linalg.inv(S) @ innov)
-            if d2 > 25.0 and self.smooth_handoff_steps == 0:
-                # Suspect multipath outlier - reject
+            if d2 > 150.0 and self.smooth_handoff_steps == 0:
+                # Extreme multipath outlier (> 12-sigma) - reject
                 return False
         except np.linalg.LinAlgError:
             pass
 
         self.ukf.update(z, R=R, hx=hx_pos)
 
-        # Optional heading alignment from GNSS course when moving fast enough
-        if course_rad is not None and self.forward_speed > 2.0:
+        # Fuse GNSS Speed update
+        if speed_mps is not None and speed_mps > 0.5:
+            z_spd = np.array([float(speed_mps)])
+            R_spd = np.array([[0.25 ** 2]])
+            self.ukf.update(z_spd, R=R_spd, hx=hx_speed)
+
+        # Fuse GNSS Heading / Course update to learn gyro bias and constrain attitude
+        if course_rad is not None and self.forward_speed > 1.5:
             d_head = (course_rad - self.ukf.x[3] + math.pi) % (2.0 * math.pi) - math.pi
-            self.ukf.x[3] = (self.ukf.x[3] + 0.25 * d_head) % (2.0 * math.pi)
+            z_head = np.array([self.ukf.x[3] + d_head])
+            R_head = np.array([[0.05 ** 2]])
+            self.ukf.update(z_head, R=R_head, hx=hx_heading)
+            self.ukf.x[3] = self.ukf.x[3] % (2.0 * math.pi)
 
         return True
 

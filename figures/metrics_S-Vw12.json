@@ -1,51 +1,38 @@
 {
   "drive": "S-Vw12",
-  "dataset_supervision": "Vehicle CAN/ECU Wheel Speed",
-  "outage_duration_s": 60.0,
-  "distance_travelled_m": 665.42,
-  "mount_alignment_deg": {
-    "pitch": -1.17,
-    "roll": 1.87,
-    "yaw": 0.0
-  },
-  "gyro_z_bias_rad_s": 0.0,
-  "stationary_fraction": 0.0,
-  "ai_velocity_rmse_mps": 15.031,
+  "outage_start_s": 25.0,
+  "outage_duration_s": 40.0,
+  "distance_travelled_m": 988.07,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": true,
   "results": {
     "Raw IMU Double Integration": {
-      "distance_m": 665.42,
-      "final_error_m": 409.68,
-      "max_error_m": 464.1,
-      "ate_rmse_m": 247.92,
-      "drift_pct": 61.57
+      "distance_m": 988.07,
+      "final_error_m": 494.38,
+      "max_error_m": 494.38,
+      "ate_rmse_m": 237.29,
+      "drift_pct": 50.03
     },
     "Standard EKF/UKF (No AI)": {
-      "distance_m": 665.42,
-      "final_error_m": 409.68,
-      "max_error_m": 464.1,
-      "ate_rmse_m": 247.92,
-      "drift_pct": 61.57
+      "distance_m": 988.07,
+      "final_error_m": 88.34,
+      "max_error_m": 88.34,
+      "ate_rmse_m": 43.42,
+      "drift_pct": 8.94
     },
     "AI Velocity-Aided UKF": {
-      "distance_m": 665.42,
-      "final_error_m": 325.57,
-      "max_error_m": 383.57,
-      "ate_rmse_m": 193.8,
-      "drift_pct": 48.93
-    },
-    "AI Residual-Aided UKF": {
-      "distance_m": 665.42,
-      "final_error_m": 126.19,
-      "max_error_m": 775.57,
-      "ate_rmse_m": 533.27,
-      "drift_pct": 18.96
+      "distance_m": 988.07,
+      "final_error_m": 76.96,
+      "max_error_m": 76.96,
+      "ate_rmse_m": 42.51,
+      "drift_pct": 7.79
     },
     "NavResilient + Map-Matching": {
-      "distance_m": 665.42,
-      "final_error_m": 325.57,
-      "max_error_m": 383.57,
-      "ate_rmse_m": 193.78,
-      "drift_pct": 48.93
+      "distance_m": 988.07,
+      "final_error_m": 69.3,
+      "max_error_m": 69.3,
+      "ate_rmse_m": 38.44,
+      "drift_pct": 7.01
     }
   }
 }

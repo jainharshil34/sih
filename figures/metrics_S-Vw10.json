@@ -1,0 +1,38 @@
+{
+  "drive": "S-Vw10",
+  "outage_start_s": 20.0,
+  "outage_duration_s": 40.0,
+  "distance_travelled_m": 518.25,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": false,
+  "results": {
+    "Raw IMU Double Integration": {
+      "distance_m": 518.25,
+      "final_error_m": 240.5,
+      "max_error_m": 240.5,
+      "ate_rmse_m": 113.71,
+      "drift_pct": 46.41
+    },
+    "Standard EKF/UKF (No AI)": {
+      "distance_m": 518.25,
+      "final_error_m": 375.34,
+      "max_error_m": 375.34,
+      "ate_rmse_m": 250.51,
+      "drift_pct": 72.42
+    },
+    "AI Velocity-Aided UKF": {
+      "distance_m": 518.25,
+      "final_error_m": 144.68,
+      "max_error_m": 151.14,
+      "ate_rmse_m": 98.36,
+      "drift_pct": 27.92
+    },
+    "NavResilient + Map-Matching": {
+      "distance_m": 518.25,
+      "final_error_m": 147.49,
+      "max_error_m": 147.49,
+      "ate_rmse_m": 92.35,
+      "drift_pct": 28.46
+    }
+  }
+}

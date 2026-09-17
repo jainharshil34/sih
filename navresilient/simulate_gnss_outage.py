@@ -44,6 +44,7 @@ class GNSSOutageSimulator:
             is_outage = (self.outage_start_s <= t <= self.outage_end_s)
 
             # IMU Frame (10 Hz)
+            has_mag = (self.drive.mag is not None and len(self.drive.mag) > i)
             imu_frame = IMUFrame(
                 timestamp_s=t,
                 ax_mps2=float(self.drive.acc_raw[i, 0]),
@@ -51,7 +52,10 @@ class GNSSOutageSimulator:
                 az_mps2=float(self.drive.acc_raw[i, 2]),
                 gx_rads=float(self.drive.gyro[i, 0]),
                 gy_rads=float(self.drive.gyro[i, 1]),
-                gz_rads=float(self.drive.gyro[i, 2])
+                gz_rads=float(self.drive.gyro[i, 2]),
+                mx_ut=float(self.drive.mag[i, 0]) if has_mag else None,
+                my_ut=float(self.drive.mag[i, 1]) if has_mag else None,
+                mz_ut=float(self.drive.mag[i, 2]) if has_mag else None
             )
 
             # GNSS Fix (1 Hz when signal available)

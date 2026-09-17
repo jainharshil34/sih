@@ -1,0 +1,14 @@
+{
+  "dataset_drive": "S-Vta10",
+  "outage_duration_s": 40.0,
+  "distance_traveled_m": 1126.39,
+  "final_drift_error_m": 110.08,
+  "max_drift_error_m": 110.08,
+  "ate_rmse_m": 32.63,
+  "drift_percentage": 9.77,
+  "map_matched_drift_pct": 9.77,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": true,
+  "mean_latency_ms": 4.22,
+  "p95_latency_ms": 5.949
+}

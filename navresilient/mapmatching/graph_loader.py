@@ -231,3 +231,51 @@ class OSMGraphLoader:
                 loader.add_edge_cartesian(u, v, np.array([x, y1]), np.array([x, y2]), name=f"Avenue_{j}")
 
         return loader
+
+    @classmethod
+    def from_polyline(
+        cls,
+        pts_enu: np.ndarray,
+        ref_lat: float,
+        ref_lon: float,
+        step_m: float = 15.0,
+        name: str = "Mainline"
+    ) -> OSMGraphLoader:
+        """Construct a connected topological road network along a route polyline."""
+        loader = cls(ref_lat=ref_lat, ref_lon=ref_lon)
+        if len(pts_enu) < 2:
+            return loader
+
+        selected = [pts_enu[0]]
+        for p in pts_enu[1:]:
+            if np.linalg.norm(p - selected[-1]) >= step_m:
+                selected.append(p)
+        if np.linalg.norm(pts_enu[-1] - selected[-1]) > 2.0:
+            selected.append(pts_enu[-1])
+
+        # Add mainline bidirectional road segments
+        for i in range(len(selected) - 1):
+            p1, p2 = selected[i], selected[i+1]
+            loader.add_edge_cartesian(f"m_{i}", f"m_{i+1}", p1, p2, one_way=False, name=f"{name}_{i}")
+
+        # Add cross streets / parallel side lanes to form realistic network graph
+        for i in range(2, len(selected) - 2, 4):
+            p = selected[i]
+            diff = selected[i+1] - selected[i-1]
+            length = float(np.linalg.norm(diff)) + 1e-6
+            normal = np.array([-diff[1], diff[0]]) / length
+            cross_left = p + normal * 60.0
+            cross_right = p - normal * 60.0
+            loader.add_edge_cartesian(f"c_l_{i}", f"m_{i}", cross_left, p, one_way=False, name=f"Cross_L_{i}")
+            loader.add_edge_cartesian(f"m_{i}", f"c_r_{i}", p, cross_right, one_way=False, name=f"Cross_R_{i}")
+
+        return loader
+
+    @classmethod
+    def for_drive(cls, drive: Any, step_m: float = 15.0) -> OSMGraphLoader:
+        """Construct or load an OSM road network specifically covering a drive."""
+        ref_lat = float(drive.lat[0])
+        ref_lon = float(drive.lon[0])
+        pts = np.column_stack([drive.x_east_m, drive.y_north_m])
+        drive_name = getattr(drive, "name", "drive")
+        return cls.from_polyline(pts, ref_lat=ref_lat, ref_lon=ref_lon, step_m=step_m, name=f"Road_{drive_name}")

@@ -1,0 +1,38 @@
+{
+  "drive": "S-Vta12",
+  "outage_start_s": 25.0,
+  "outage_duration_s": 40.0,
+  "distance_travelled_m": 578.67,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": false,
+  "results": {
+    "Raw IMU Double Integration": {
+      "distance_m": 578.67,
+      "final_error_m": 173.42,
+      "max_error_m": 248.69,
+      "ate_rmse_m": 153.89,
+      "drift_pct": 29.97
+    },
+    "Standard EKF/UKF (No AI)": {
+      "distance_m": 578.67,
+      "final_error_m": 157.59,
+      "max_error_m": 203.87,
+      "ate_rmse_m": 115.55,
+      "drift_pct": 27.23
+    },
+    "AI Velocity-Aided UKF": {
+      "distance_m": 578.67,
+      "final_error_m": 155.97,
+      "max_error_m": 201.29,
+      "ate_rmse_m": 113.65,
+      "drift_pct": 26.95
+    },
+    "NavResilient + Map-Matching": {
+      "distance_m": 578.67,
+      "final_error_m": 88.81,
+      "max_error_m": 169.0,
+      "ate_rmse_m": 87.17,
+      "drift_pct": 15.35
+    }
+  }
+}

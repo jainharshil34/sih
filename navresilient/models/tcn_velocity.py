@@ -56,8 +56,11 @@ if TORCH_AVAILABLE:
     class TCNVelocityNet(nn.Module):
         """Temporal Convolutional Network for velocity and uncertainty regression."""
         def __init__(self, in_channels: int = 6, hidden_channels: int = 32,
-                     num_layers: int = 3, kernel_size: int = 3):
+                     num_layers: int = 3, kernel_size: int = 3,
+                     hidden_dim: Optional[int] = None):
             super().__init__()
+            if hidden_dim is not None:
+                hidden_channels = hidden_dim
             layers = []
             c_in = in_channels
             for i in range(num_layers):
@@ -120,24 +123,46 @@ def extract_imu_windows(acc_v: np.ndarray, gyro_v: np.ndarray, fs: float,
 
 
 class TCNVelocity:
-    """Production TCN Velocity Estimator with Heteroscedastic Uncertainty."""
+    """Production TCN & Ridge Velocity Estimator with Heteroscedastic Uncertainty."""
 
     def __init__(self, win_s: float = 2.0, lr: float = 1e-3, epochs: int = 25,
-                 device: str = "cpu"):
+                 device: str = "cpu", model_path: Optional[str] = None):
         self.win_s = win_s
         self.lr = lr
         self.epochs = epochs
         self.device = torch.device(device) if TORCH_AVAILABLE and torch.cuda.is_available() and device == "cuda" else torch.device("cpu")
         self.model = TCNVelocityNet().to(self.device) if TORCH_AVAILABLE else None
         self.is_fitted = False
+        self.is_fitted_torch = False
+        self.mean_v = 0.0
         
-        # Fallback feature scaler & weights for fast numpy edge execution
+        # Robust feature scaler & weights for fast numpy edge execution
         self.feature_mu = None
         self.feature_sd = None
         self.ridge_w = None
 
+        if model_path is None:
+            # Check default locations for pre-trained weights
+            for cand in [
+                os.path.join(os.path.dirname(__file__), "../../artifacts/models/tcn_velocity.pt"),
+                "artifacts/models/tcn_velocity.pt",
+            ]:
+                if os.path.exists(cand):
+                    model_path = cand
+                    break
+
+        if model_path and os.path.exists(model_path) and TORCH_AVAILABLE and self.model is not None:
+            try:
+                state_dict = torch.load(model_path, map_location=self.device)
+                self.model.load_state_dict(state_dict)
+                self.model.eval()
+                self.is_fitted = True
+                self.is_fitted_torch = True
+            except Exception:
+                pass
+
     def fit(self, drives: list[Tuple[np.ndarray, np.ndarray]], targets: list[np.ndarray], fs: float):
-        """Train TCN model with heteroscedastic NLL loss on paired IMU and velocity targets."""
+        """Train velocity model on paired IMU and velocity targets."""
         all_X, all_Y = [], []
         for (acc_v, gyro_v), y in zip(drives, targets):
             X_w, idx = extract_imu_windows(acc_v, gyro_v, fs, self.win_s)
@@ -152,40 +177,44 @@ class TCNVelocity:
 
         X = np.concatenate(all_X, axis=0)
         Y = np.concatenate(all_Y, axis=0).astype(np.float32)
+        self.mean_v = float(np.mean(Y))
 
         # 1. Fit fast baseline weights for edge fallback
         self._fit_numpy_fallback(X, Y, fs)
+        self.is_fitted = True
 
-        if not TORCH_AVAILABLE:
-            self.is_fitted = True
+        if not TORCH_AVAILABLE or len(X) < 100:
             return self
 
-        # 2. Train PyTorch Deep TCN
-        dataset = torch.utils.data.TensorDataset(torch.from_numpy(X), torch.from_numpy(Y).unsqueeze(1))
-        loader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
-        
-        optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs)
+        try:
+            # 2. Train PyTorch Deep TCN
+            dataset = torch.utils.data.TensorDataset(torch.from_numpy(X), torch.from_numpy(Y).unsqueeze(1))
+            loader = torch.utils.data.DataLoader(dataset, batch_size=min(32, len(dataset)), shuffle=True)
+            
+            optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs)
 
-        self.model.train()
-        for _ in range(self.epochs):
-            for batch_x, batch_y in loader:
-                batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
-                optimizer.zero_grad()
-                pred_v, log_var = self.model(batch_x)
-                # Heteroscedastic Gaussian NLL loss: 0.5 * ( (y - y_hat)^2 / var + log_var )
-                loss = 0.5 * (torch.exp(-log_var) * (batch_y - pred_v) ** 2 + log_var).mean()
-                loss.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                optimizer.step()
-            scheduler.step()
+            self.model.train()
+            for _ in range(self.epochs):
+                for batch_x, batch_y in loader:
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    optimizer.zero_grad()
+                    pred_v, log_var = self.model(batch_x)
+                    loss = 0.5 * (torch.exp(-log_var) * (batch_y - pred_v) ** 2 + log_var).mean()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    optimizer.step()
+                scheduler.step()
 
-        self.is_fitted = True
+            self.model.eval()
+            self.is_fitted_torch = True
+        except Exception:
+            pass
+
         return self
 
     def _fit_numpy_fallback(self, X_windows: np.ndarray, Y: np.ndarray, fs: float):
         """Fit lightweight statistical features for sub-millisecond edge fallback."""
-        # Extract features: mean, std, max, energy
         feats = []
         for w in X_windows:
             feats.append(np.concatenate([
@@ -193,31 +222,49 @@ class TCNVelocity:
                 w.std(axis=1),
                 np.max(np.abs(w), axis=1),
                 np.sqrt(np.mean(w ** 2, axis=1)),
-                [np.trapz(w[0], dx=1.0 / fs) if hasattr(np, 'trapz') else np.sum(w[0]) / fs],
+                [np.sum(w[0]) / fs],
             ]))
         F = np.asarray(feats, dtype=np.float32)
         self.feature_mu = F.mean(axis=0)
         self.feature_sd = F.std(axis=0) + 1e-6
         Fs = np.column_stack([(F - self.feature_mu) / self.feature_sd, np.ones(len(F))])
-        A = Fs.T @ Fs + 1.0 * np.eye(Fs.shape[1])
+        A = Fs.T @ Fs + 0.5 * np.eye(Fs.shape[1])
         self.ridge_w = np.linalg.solve(A, Fs.T @ Y)
 
     def predict(self, acc_v: np.ndarray, gyro_v: np.ndarray, fs: float,
                 n_out: int) -> Tuple[np.ndarray, np.ndarray]:
         """Predict forward speed (m/s) and estimated variance sigma_v^2 (m^2/s^2)."""
+        if not self.is_fitted:
+            return np.full(n_out, self.mean_v), np.full(n_out, 0.25)
+
         X_w, idx = extract_imu_windows(acc_v, gyro_v, fs, self.win_s)
         if len(idx) == 0:
-            return np.zeros(n_out), np.ones(n_out) * 0.5
+            return np.full(n_out, self.mean_v), np.full(n_out, 0.25)
 
-        if TORCH_AVAILABLE and self.is_fitted and self.model is not None:
-            self.model.eval()
-            with torch.no_grad():
-                tensor_x = torch.from_numpy(X_w).to(self.device)
-                pred_v, log_var = self.model(tensor_x)
-                v_arr = pred_v.cpu().numpy().ravel()
-                var_arr = np.exp(log_var.cpu().numpy().ravel())
-        else:
-            # Fallback to feature ridge
+        # 1. Primary path: Deep PyTorch TCN inference
+        if self.is_fitted_torch and self.model is not None and TORCH_AVAILABLE:
+            try:
+                self.model.eval()
+                with torch.no_grad():
+                    tx = torch.from_numpy(X_w).float().to(self.device)
+                    pv, lv = self.model(tx)
+                    v_arr = np.maximum(pv.squeeze(-1).cpu().numpy(), 0.0)
+                    # Variance = exp(log_var). Increase var when confidence is low to avoid pulling UKF incorrectly
+                    var_arr = np.maximum(np.exp(lv.squeeze(-1).cpu().numpy()), 0.05)
+
+                    out_v = np.full(n_out, np.nan)
+                    out_var = np.full(n_out, np.nan)
+                    out_v[idx] = v_arr
+                    out_var[idx] = var_arr
+
+                    out_v = _ffill(out_v, default=self.mean_v)
+                    out_var = _ffill(out_var, default=0.20)
+                    return np.maximum(out_v, 0.0), np.maximum(out_var, 0.01)
+            except Exception:
+                pass
+
+        # 2. Fallback path: Ridge statistical regression
+        if self.ridge_w is not None and self.feature_mu is not None:
             feats = []
             for w in X_w:
                 feats.append(np.concatenate([
@@ -230,17 +277,19 @@ class TCNVelocity:
             F = np.asarray(feats, dtype=np.float32)
             Fs = np.column_stack([(F - self.feature_mu) / self.feature_sd, np.ones(len(F))])
             v_arr = np.maximum(Fs @ self.ridge_w, 0.0)
-            var_arr = np.full(len(v_arr), 0.25, dtype=np.float32)
+            var_arr = np.full(len(v_arr), 0.20, dtype=np.float32)
 
-        out_v = np.full(n_out, np.nan)
-        out_var = np.full(n_out, np.nan)
-        out_v[idx] = v_arr
-        out_var[idx] = var_arr
+            out_v = np.full(n_out, np.nan)
+            out_var = np.full(n_out, np.nan)
+            out_v[idx] = v_arr
+            out_var[idx] = var_arr
 
-        # Forward-fill to cover full time horizon
-        out_v = _ffill(out_v)
-        out_var = _ffill(out_var, default=0.25)
-        return np.maximum(out_v, 0.0), np.maximum(out_var, 0.01)
+            # Forward-fill to cover full time horizon
+            out_v = _ffill(out_v, default=self.mean_v)
+            out_var = _ffill(out_var, default=0.20)
+            return np.maximum(out_v, 0.0), np.maximum(out_var, 0.01)
+
+        return np.full(n_out, self.mean_v), np.full(n_out, 0.25)
 
 
 def _ffill(a: np.ndarray, default: float = 0.0) -> np.ndarray:

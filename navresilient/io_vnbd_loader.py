@@ -127,6 +127,7 @@ class ParsedDrive:
     gps_course_rad: np.ndarray
     x_east_m: np.ndarray
     y_north_m: np.ndarray
+    mag: Optional[np.ndarray] = None  # (N, 3) uT magnetometer
     fs: float = FS
 
     def __len__(self) -> int:
@@ -158,8 +159,15 @@ def load_smartphone_drive(path: str, name: Optional[str] = None) -> ParsedDrive:
     acc_linear = acc_raw - grav if (np.isfinite(grav).all() and np.abs(grav).sum() > 0) else acc_raw
 
     gyro = np.column_stack([g("wx"), g("wy"), g("wz")])
-    t_ms = g("t_ms")
-    t_s = (t_ms - np.nanmin(t_ms)) / 1000.0 if np.isfinite(t_ms).any() else np.arange(len(df)) / FS
+    t_raw = g("t_ms")
+    if np.isfinite(t_raw).any():
+        dt_median = float(np.nanmedian(np.diff(t_raw))) if len(t_raw) > 1 else 0.1
+        if dt_median > 5.0 or np.nanmax(t_raw) > 10000.0:
+            t_s = (t_raw - np.nanmin(t_raw)) / 1000.0
+        else:
+            t_s = t_raw - np.nanmin(t_raw)
+    else:
+        t_s = np.arange(len(df)) / FS
 
     lat, lon = g("lat"), g("lon")
     ok = np.isfinite(lat) & np.isfinite(lon) & np.isfinite(acc_raw).all(1) & np.isfinite(gyro).all(1)
@@ -170,9 +178,36 @@ def load_smartphone_drive(path: str, name: Optional[str] = None) -> ParsedDrive:
 
     lat = pd.Series(lat).ffill().bfill().to_numpy()[sl]
     lon = pd.Series(lon).ffill().bfill().to_numpy()[sl]
-    spd = g("gps_speed")[sl] / 3.6  # km/h to m/s
-    crs = np.radians(g("gps_course", 0.0)[sl])
+    raw_spd = g("gps_speed")[sl]
+    # In AndroSensor/smartphone datasets, GPS speed is recorded in m/s
+    spd = raw_spd if np.isfinite(raw_spd).any() else np.zeros_like(lat)
+
+    # If GPS lat/lon was held constant between discrete receiver fixes, interpolate smoothly
+    change_idx = np.where((np.diff(lat) != 0) | (np.diff(lon) != 0))[0] + 1
+    if len(change_idx) > 1:
+        if change_idx[0] > 0 and len(change_idx) >= 2:
+            dt_fresh = float(change_idx[1] - change_idx[0])
+            lat[0] = lat[change_idx[0]] - (lat[change_idx[1]] - lat[change_idx[0]]) * (float(change_idx[0]) / dt_fresh)
+            lon[0] = lon[change_idx[0]] - (lon[change_idx[1]] - lon[change_idx[0]]) * (float(change_idx[0]) / dt_fresh)
+        full_anchors = np.unique(np.concatenate([[0], change_idx, [len(lat) - 1]]))
+        t_idx = np.arange(len(lat))
+        lat = np.interp(t_idx, full_anchors, lat[full_anchors])
+        lon = np.interp(t_idx, full_anchors, lon[full_anchors])
+
     x, y = latlon_to_enu(lat, lon)
+    
+    # Calculate Course Over Ground (COG) from ENU displacement
+    dx = np.gradient(x)
+    dy = np.gradient(y)
+    crs_cog = np.arctan2(dx, dy)
+    
+    raw_crs = np.radians(g("gps_course", 0.0)[sl])
+    if np.nanmax(np.abs(raw_crs)) < 1e-4 or np.nanstd(raw_crs) < 1e-4:
+        crs = crs_cog
+    else:
+        crs = np.where(spd > 0.8, crs_cog, raw_crs)
+
+    mag = np.column_stack([g("mx", 0.0), g("my", 0.0), g("mz", 0.0)])[sl]
 
     return ParsedDrive(
         name=name or os.path.basename(path).replace(".csv", ""),
@@ -186,7 +221,8 @@ def load_smartphone_drive(path: str, name: Optional[str] = None) -> ParsedDrive:
         gps_speed_mps=spd,
         gps_course_rad=crs,
         x_east_m=x,
-        y_north_m=y
+        y_north_m=y,
+        mag=mag
     )
 
 

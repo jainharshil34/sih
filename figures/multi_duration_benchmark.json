@@ -1,0 +1,110 @@
+[
+  {
+    "dataset": "S-Vw12 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 15.0,
+    "distance_m": 394.7,
+    "final_error_m": 277.45,
+    "drift_pct": 70.29,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-Vw12 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 30.0,
+    "distance_m": 765.0,
+    "final_error_m": 553.11,
+    "drift_pct": 72.31,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-Vw12 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 50.0,
+    "distance_m": 1230.6,
+    "final_error_m": 878.19,
+    "drift_pct": 71.36,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-Vta10 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 15.0,
+    "distance_m": 424.4,
+    "final_error_m": 427.85,
+    "drift_pct": 100.8,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-Vta10 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 30.0,
+    "distance_m": 855.0,
+    "final_error_m": 824.12,
+    "drift_pct": 96.39,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-Vta10 (Real Vehicle)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 60.0,
+    "distance_m": 1573.2,
+    "final_error_m": 1656.03,
+    "drift_pct": 105.26,
+    "sih_passed": false
+  },
+  {
+    "dataset": "my_walk_synced (Real Pedestrian)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 15.0,
+    "distance_m": 2.2,
+    "final_error_m": 24.1,
+    "drift_pct": 1099.11,
+    "sih_passed": false
+  },
+  {
+    "dataset": "my_walk_synced (Real Pedestrian)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 30.0,
+    "distance_m": 40.8,
+    "final_error_m": 18.12,
+    "drift_pct": 44.46,
+    "sih_passed": false
+  },
+  {
+    "dataset": "my_walk_synced (Real Pedestrian)",
+    "type": "Real Smartphone / Vehicle",
+    "outage_duration_s": 60.0,
+    "distance_m": 1084.9,
+    "final_error_m": 141.64,
+    "drift_pct": 13.06,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-DEMO-SYNTHETIC",
+    "type": "Controlled Synthetic",
+    "outage_duration_s": 15.0,
+    "distance_m": 232.9,
+    "final_error_m": 347.29,
+    "drift_pct": 149.13,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-DEMO-SYNTHETIC",
+    "type": "Controlled Synthetic",
+    "outage_duration_s": 30.0,
+    "distance_m": 489.5,
+    "final_error_m": 308.67,
+    "drift_pct": 63.06,
+    "sih_passed": false
+  },
+  {
+    "dataset": "S-DEMO-SYNTHETIC",
+    "type": "Controlled Synthetic",
+    "outage_duration_s": 50.0,
+    "distance_m": 827.7,
+    "final_error_m": 66.55,
+    "drift_pct": 8.04,
+    "sih_passed": true
+  }
+]

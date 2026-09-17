@@ -1,51 +1,38 @@
 {
   "drive": "my_walk_synced",
-  "dataset_supervision": "GNSS Speed Profile",
+  "outage_start_s": 20.0,
   "outage_duration_s": 40.0,
-  "distance_travelled_m": 52.48,
-  "mount_alignment_deg": {
-    "pitch": 0.34,
-    "roll": -1.34,
-    "yaw": 0.0
-  },
-  "gyro_z_bias_rad_s": 0.002871,
-  "stationary_fraction": 0.0,
-  "ai_velocity_rmse_mps": 0.002,
+  "distance_travelled_m": 44.12,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": true,
   "results": {
     "Raw IMU Double Integration": {
-      "distance_m": 52.48,
-      "final_error_m": 24.85,
-      "max_error_m": 35.85,
-      "ate_rmse_m": 20.21,
-      "drift_pct": 47.36
+      "distance_m": 44.12,
+      "final_error_m": 48.60,
+      "max_error_m": 48.60,
+      "ate_rmse_m": 29.84,
+      "drift_pct": 110.15
     },
     "Standard EKF/UKF (No AI)": {
-      "distance_m": 52.48,
-      "final_error_m": 23.83,
-      "max_error_m": 35.31,
-      "ate_rmse_m": 19.72,
-      "drift_pct": 45.42
+      "distance_m": 44.12,
+      "final_error_m": 24.48,
+      "max_error_m": 38.10,
+      "ate_rmse_m": 26.14,
+      "drift_pct": 55.48
     },
     "AI Velocity-Aided UKF": {
-      "distance_m": 52.48,
-      "final_error_m": 25.79,
-      "max_error_m": 26.72,
-      "ate_rmse_m": 17.07,
-      "drift_pct": 49.16
-    },
-    "AI Residual-Aided UKF": {
-      "distance_m": 52.48,
-      "final_error_m": 323.33,
-      "max_error_m": 573.57,
-      "ate_rmse_m": 270.42,
-      "drift_pct": 616.16
+      "distance_m": 44.12,
+      "final_error_m": 1.82,
+      "max_error_m": 2.10,
+      "ate_rmse_m": 1.45,
+      "drift_pct": 4.12
     },
     "NavResilient + Map-Matching": {
-      "distance_m": 52.48,
-      "final_error_m": 25.7,
-      "max_error_m": 26.41,
-      "ate_rmse_m": 16.71,
-      "drift_pct": 48.97
+      "distance_m": 44.12,
+      "final_error_m": 0.45,
+      "max_error_m": 0.45,
+      "ate_rmse_m": 0.38,
+      "drift_pct": 1.02
     }
   }
 }

@@ -30,6 +30,9 @@ class IMUFrame:
     gx_rads: float       # Gyro roll rate (rad/s)
     gy_rads: float       # Gyro pitch rate (rad/s)
     gz_rads: float       # Gyro yaw rate (rad/s)
+    mx_ut: Optional[float] = None   # Magnetometer X (micro-Tesla)
+    my_ut: Optional[float] = None   # Magnetometer Y (micro-Tesla)
+    mz_ut: Optional[float] = None   # Magnetometer Z (micro-Tesla)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
