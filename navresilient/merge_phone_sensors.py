@@ -50,11 +50,15 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
 
     print(f"Scanning '{folder_path}' for sensor CSV files...")
 
-    # Exclude uncalibrated if calibrated exists
+    # Exclude uncalibrated if calibrated exists, prefer TotalAcceleration (with gravity) for IMU mechanization
     all_csvs = [f for f in os.listdir(folder_path) if f.lower().endswith(".csv")]
-    acc_cand = [f for f in all_csvs if "accel" in f.lower() or "totalacceleration" in f.lower()]
-    acc_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
-    acc_path = os.path.join(folder_path, acc_cand[0]) if acc_cand else None
+    tot_acc = [f for f in all_csvs if "totalaccel" in f.lower()]
+    if tot_acc:
+        acc_path = os.path.join(folder_path, tot_acc[0])
+    else:
+        acc_cand = [f for f in all_csvs if "accel" in f.lower()]
+        acc_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
+        acc_path = os.path.join(folder_path, acc_cand[0]) if acc_cand else None
 
     gyro_cand = [f for f in all_csvs if "gyro" in f.lower()]
     gyro_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
@@ -175,16 +179,31 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
         crs_c = next((c for c in df_loc.columns if "bearing" in c.lower() and "accuracy" not in c.lower() or "orientation" in c.lower()), None)
 
         if lat_c and lon_c:
-            out_dict["latitude"] = np.interp(t_uniform, t_loc, df_loc[lat_c].values)
-            out_dict["longitude"] = np.interp(t_uniform, t_loc, df_loc[lon_c].values)
+            acc_vals = df_loc[acc_acc_c].values if acc_acc_c else np.zeros(len(df_loc))
+            valid_loc_mask = (acc_vals < 40.0) | (acc_vals == 0.0)
+            if np.sum(valid_loc_mask) >= 3:
+                t_loc_use = t_loc[valid_loc_mask]
+                lat_use = df_loc[lat_c].values[valid_loc_mask]
+                lon_use = df_loc[lon_c].values[valid_loc_mask]
+                spd_use = df_loc[spd_c].values[valid_loc_mask] if spd_c else np.zeros(len(t_loc_use))
+                crs_use = df_loc[crs_c].values[valid_loc_mask] if crs_c else np.zeros(len(t_loc_use))
+            else:
+                t_loc_use = t_loc
+                lat_use = df_loc[lat_c].values
+                lon_use = df_loc[lon_c].values
+                spd_use = df_loc[spd_c].values if spd_c else np.zeros(len(t_loc))
+                crs_use = df_loc[crs_c].values if crs_c else np.zeros(len(t_loc))
+
+            out_dict["latitude"] = np.interp(t_uniform, t_loc_use, lat_use)
+            out_dict["longitude"] = np.interp(t_uniform, t_loc_use, lon_use)
             if spd_c:
-                out_dict["speed"] = np.interp(t_uniform, t_loc, df_loc[spd_c].values)
+                out_dict["speed"] = np.interp(t_uniform, t_loc_use, spd_use)
             else:
                 out_dict["speed"] = np.zeros(n_samples)
             if acc_acc_c:
                 out_dict["accuracy"] = np.interp(t_uniform, t_loc, df_loc[acc_acc_c].values)
             if crs_c:
-                out_dict["bearing"] = np.interp(t_uniform, t_loc, df_loc[crs_c].values)
+                out_dict["bearing"] = np.interp(t_uniform, t_loc_use, crs_use)
 
     out_df = pd.DataFrame(out_dict)
     os.makedirs(os.path.dirname(os.path.abspath(output_csv)), exist_ok=True)

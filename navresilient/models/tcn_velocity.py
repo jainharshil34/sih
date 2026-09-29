@@ -316,6 +316,10 @@ class TCNVelocity:
                     v_arr = np.maximum(pv.squeeze(-1).cpu().numpy(), 0.0)
                     var_arr = np.maximum(np.exp(lv.squeeze(-1).cpu().numpy()), 0.01)
 
+                    if getattr(self, "adapted", False):
+                        v_arr = np.clip(self.scale_alpha * v_arr + self.bias_beta, 0.0, self.max_observed_speed)
+                        var_arr = np.maximum(var_arr * (self.scale_alpha ** 2), self.calibrated_var)
+
                     out_v = np.full(n_out, np.nan)
                     out_var = np.full(n_out, np.nan)
                     out_v[idx] = v_arr

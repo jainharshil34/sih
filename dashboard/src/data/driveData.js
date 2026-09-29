@@ -21,7 +21,7 @@ export const REAL_DRIVES = {
     ref_lon: 76.378576,
     outage_start_s: 15.0,
     outage_len_s: 30.0,
-    distance_m: 579.8,
+    distance_m: 523.4,
     generatePoints: () => myRidePoints
   },
   "S-Vw12": {

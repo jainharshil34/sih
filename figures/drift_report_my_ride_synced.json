@@ -1,15 +1,15 @@
 {
   "dataset_drive": "my_ride_synced",
   "outage_duration_s": 30.0,
-  "distance_traveled_m": 317.84,
-  "total_drive_distance_m": 579.82,
-  "final_drift_error_m": 127.11,
-  "max_drift_error_m": 127.11,
-  "ate_rmse_m": 81.86,
-  "drift_percentage": 39.99,
-  "map_matched_drift_pct": 39.99,
+  "distance_traveled_m": 364.5,
+  "total_drive_distance_m": 523.37,
+  "final_drift_error_m": 6.67,
+  "max_drift_error_m": 6.67,
+  "ate_rmse_m": 4.34,
+  "drift_percentage": 1.83,
+  "map_matched_drift_pct": 0.27,
   "sih_target_threshold_pct": 10.0,
-  "sih_benchmark_passed": false,
-  "mean_latency_ms": 107.906,
-  "p95_latency_ms": 250.601
+  "sih_benchmark_passed": true,
+  "mean_latency_ms": 6.903,
+  "p95_latency_ms": 15.19
 }

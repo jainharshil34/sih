@@ -368,27 +368,22 @@ class NavResilientEngine:
             # Speed Sanity & Mahalanobis Residual Gating vs current UKF State
             if not is_stationary and v_ai is not None:
                 v_curr_ukf = self.ukf.forward_speed
-                # Pedestrian & Slow Mobile Handler: If moving at walking speed but vehicle AI predicts highway speed
-                if v_curr_ukf < 3.0 and v_ai > 3.5:
-                    step_energy = float(np.std(np.linalg.norm(arr_a, axis=1)))
-                    v_ai = float(np.clip(1.15 + step_energy * 0.12, 0.8, 1.6))
-                    var_ai = 0.05
-                else:
-                    v_diff = abs(v_ai - v_curr_ukf)
-                    if v_diff > 3.5:
-                        # Scale variance quadratically with discrepancy to avoid pulling filter erratically
-                        var_ai = var_ai * (1.0 + (v_diff - 3.5) ** 2)
-                        if v_diff > 7.0:
-                            # Unphysical instantaneous jump -> reject AI velocity update
-                            v_ai = None
+                v_diff = abs(v_ai - v_curr_ukf)
+                if v_diff > 4.0:
+                    # Scale variance quadratically with discrepancy to avoid pulling filter erratically
+                    var_ai = var_ai * (1.0 + (v_diff - 4.0) ** 2)
+                    if v_diff > 12.0:
+                        # Unphysical instantaneous jump -> reject AI velocity update
+                        v_ai = None
 
         # 5. Pipeline Stage 4: Dead-Reckoning & Kinematic Propagation
         is_outage = (self.status == SystemStatus.GNSS_DENIED_INS)
         
         # Step complementary heading filter (Gyro + Tilt-Compensated Mag + GNSS Course Anchor)
+        gyro_z_input = float(gyro_veh[2]) if self.enable_calibration else float(gyro_raw[2])
         hdg_state = self.heading_filter.step(
-            gyro_z_raw=float(gyro_raw[2]),
-            acc_raw=acc_raw,
+            gyro_z_raw=gyro_z_input,
+            acc_raw=acc_veh if self.enable_calibration else acc_raw,
             mag_raw=mag_raw,
             dt=dt,
             is_stationary=is_stationary,
@@ -448,22 +443,19 @@ class NavResilientEngine:
             if match_res.is_snapped and not match_res.is_off_road:
                 s_lat, s_lon = self.enu_to_latlon(match_res.snapped_pos[0], match_res.snapped_pos[1])
                 snapped_lat, snapped_lon = s_lat, s_lon
-                # Confidence-scaled guidance towards road centerline (stronger during outage)
-                if match_res.confidence >= 0.15:
-                    if is_outage:
-                        blend = float(np.clip(0.70 * match_res.confidence, 0.35, 0.85))
-                    else:
-                        blend = 0.22 * match_res.confidence
+                # Gentle cross-track guidance towards road centerline when search is confident
+                if match_res.confidence >= 0.30 and match_res.cross_track_dist_m < 20.0:
+                    blend = 0.20 * match_res.confidence if is_outage else 0.10 * match_res.confidence
                     east = (1.0 - blend) * east + blend * match_res.snapped_pos[0]
                     north = (1.0 - blend) * north + blend * match_res.snapped_pos[1]
                     self.ukf.ukf.x[0] = east
                     self.ukf.ukf.x[1] = north
 
                     # Heading constraint from matched road bearing during outage
-                    if is_outage and match_res.confidence >= 0.25:
+                    if is_outage and match_res.confidence >= 0.35:
                         d_hdg = (match_res.road_bearing_rad - heading + math.pi) % (2.0 * math.pi) - math.pi
-                        if abs(d_hdg) < math.radians(45.0):
-                            hdg_blend = 0.18 * match_res.confidence
+                        if abs(d_hdg) < math.radians(35.0):
+                            hdg_blend = 0.12 * match_res.confidence
                             new_hdg = heading + hdg_blend * d_hdg
                             self.ukf.ukf.x[3] = new_hdg
                             self.heading_filter.heading_rad = new_hdg
