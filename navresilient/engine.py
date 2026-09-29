@@ -269,7 +269,10 @@ class NavResilientEngine:
             is_stationary = (regime == MotionRegime.STATIONARY_IDLE)
 
         # 3. Check for GNSS Outage (> 1.2 seconds without fix)
-        if self.last_gnss_time > 0 and (t - self.last_gnss_time) > 1.2:
+        # A perfectly valid first GNSS sample is commonly timestamped 0.0.
+        # The previous `> 0` sentinel silently kept the engine GNSS-locked
+        # forever after such a sample, even when no further fixes arrived.
+        if self.last_gnss_time >= 0 and (t - self.last_gnss_time) > 1.2:
             if self.status != SystemStatus.GNSS_DENIED_INS:
                 self.status = SystemStatus.GNSS_DENIED_INS
                 self.outage_start_distance_m = self.total_distance_m

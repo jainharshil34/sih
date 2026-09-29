@@ -63,6 +63,7 @@ class OSMGraphLoader:
         self.edges: List[RoadEdge] = []
         self._kd_tree: Optional[KDTree] = None
         self._edge_midpoints: np.ndarray = np.empty((0, 2))
+        self._max_half_edge_length_m: float = 0.0
 
     def latlon_to_enu(self, lat: float, lon: float) -> Tuple[float, float]:
         """Convert WGS-84 (lat, lon) to local East-North-Up Cartesian coordinates (m)."""
@@ -108,6 +109,7 @@ class OSMGraphLoader:
         """Extract Cartesian road edges and build spatial KD-Tree."""
         self.edges.clear()
         midpoints = []
+        max_half_length = 0.0
 
         edge_idx = 0
         for u, v, k, data in self.graph.edges(keys=True, data=True):
@@ -140,14 +142,17 @@ class OSMGraphLoader:
             )
             self.edges.append(edge)
             midpoints.append(0.5 * (p1 + p2))
+            max_half_length = max(max_half_length, length / 2.0)
             edge_idx += 1
 
         if midpoints:
             self._edge_midpoints = np.array(midpoints)
             self._kd_tree = KDTree(self._edge_midpoints)
+            self._max_half_edge_length_m = max_half_length
         else:
             self._edge_midpoints = np.empty((0, 2))
             self._kd_tree = None
+            self._max_half_edge_length_m = 0.0
 
     def add_edge_cartesian(
         self,
@@ -186,6 +191,7 @@ class OSMGraphLoader:
         midpoints = [0.5 * (e.p1 + e.p2) for e in self.edges]
         self._edge_midpoints = np.array(midpoints)
         self._kd_tree = KDTree(self._edge_midpoints)
+        self._max_half_edge_length_m = max(e.length_m / 2.0 for e in self.edges)
         return edge
 
     def query_candidate_edges(self, query_p: np.ndarray, radius_m: float = 35.0) -> List[RoadEdge]:
@@ -193,9 +199,14 @@ class OSMGraphLoader:
         if self._kd_tree is None or len(self.edges) == 0:
             return []
 
-        # Find all midpoints within extended radius (adding edge length buffer)
+        # A midpoint index can only safely prune a segment when its half-length
+        # is included in the search radius. A fixed 50 m allowance misses long
+        # OSM ways when the vehicle is near an endpoint.
         query_2d = query_p[:2]
-        indices = self._kd_tree.query_ball_point(query_2d, r=radius_m + 50.0)
+        indices = self._kd_tree.query_ball_point(
+            query_2d,
+            r=radius_m + self._max_half_edge_length_m
+        )
         return [self.edges[idx] for idx in indices]
 
     @classmethod

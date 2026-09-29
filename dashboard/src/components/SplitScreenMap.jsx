@@ -91,6 +91,7 @@ export const OSM_THEMES = [
 export default function SplitScreenMap({
   currentPoint,
   history,
+  routePoints,
   isOutage,
   distanceTraveled,
   driftPct,
@@ -103,6 +104,8 @@ export default function SplitScreenMap({
   const rightMapRef = useRef(null);
   const leftTileRef = useRef(null);
   const rightTileRef = useRef(null);
+  const syncingViewRef = useRef(false);
+  const fittedRouteRef = useRef(null);
 
   const [activeTheme, setActiveTheme] = useState('hot');
 
@@ -139,8 +142,11 @@ export default function SplitScreenMap({
       maxZoom: theme.maxZoom,
       detectRetina: true,
       crossOrigin: true,
-      keepBuffer: 6,
-      updateWhenZooming: true,
+      keepBuffer: 4,
+      // Let Leaflet replace tiles after a zoom completes. Updating during the
+      // transform causes visible tile churn on slower OSM tile servers.
+      updateWhenZooming: false,
+      updateWhenIdle: true,
       attribution: theme.attribution,
     });
   };
@@ -189,27 +195,32 @@ export default function SplitScreenMap({
     rightMapRef.current = rightMap;
 
     // Attach Initial Tile Layers
-    const leftTile = createTileLayer(activeTheme).addTo(leftMap);
+    const leftTile = createTileLayer('hot').addTo(leftMap);
     leftTile.bringToBack();
     leftTileRef.current = leftTile;
 
-    const rightTile = createTileLayer(activeTheme).addTo(rightMap);
+    const rightTile = createTileLayer('hot').addTo(rightMap);
     rightTile.bringToBack();
     rightTileRef.current = rightTile;
 
-    // Synchronize pan & zoom between both maps on user interactions (drag & zoom)
-    let isUserInteracting = false;
-    const bindMapSync = (sourceMap, targetMap) => {
-      sourceMap.on('drag', () => {
-        targetMap.setView(sourceMap.getCenter(), sourceMap.getZoom(), { animate: false });
-      });
-      sourceMap.on('zoomend', () => {
-        targetMap.setView(sourceMap.getCenter(), sourceMap.getZoom(), { animate: false });
-      });
+    // Mirror a completed camera move once.  Syncing on every `drag` event
+    // feeds programmatic map updates back into the source map and is the
+    // primary cause of the visible zoom/pan jitter.
+    const syncView = (sourceMap, targetMap) => {
+      if (syncingViewRef.current) return;
+      syncingViewRef.current = true;
+      targetMap.stop();
+      targetMap.setView(sourceMap.getCenter(), sourceMap.getZoom(), { animate: false });
+      requestAnimationFrame(() => { syncingViewRef.current = false; });
     };
+    const syncLeftToRight = () => syncView(leftMap, rightMap);
+    const syncRightToLeft = () => syncView(rightMap, leftMap);
+    const pauseFollow = () => setFollowVehicle(false);
 
-    bindMapSync(leftMap, rightMap);
-    bindMapSync(rightMap, leftMap);
+    leftMap.on('moveend', syncLeftToRight);
+    rightMap.on('moveend', syncRightToLeft);
+    leftMap.on('dragstart', pauseFollow);
+    rightMap.on('dragstart', pauseFollow);
 
     // Initialize Left Map Layers
     const lLayers = leftLayersRef.current;
@@ -232,6 +243,10 @@ export default function SplitScreenMap({
     rLayers.egressMarker = L.marker([0, 0], { icon: createPinIcon('#059669', 'TUNNEL OUT') });
 
     return () => {
+      leftMap.off('moveend', syncLeftToRight);
+      rightMap.off('moveend', syncRightToLeft);
+      leftMap.off('dragstart', pauseFollow);
+      rightMap.off('dragstart', pauseFollow);
       leftMap.remove();
       rightMap.remove();
       leftMapRef.current = null;
@@ -239,21 +254,28 @@ export default function SplitScreenMap({
     };
   }, [refLat, refLon, selectedDrive?.id]);
 
-  // Fit bounds when new drive loads
+  // Frame the complete route once per selected drive. `history` grows on every
+  // playback tick, so it must never be used to drive fitBounds.
   useEffect(() => {
-    if (!history || history.length === 0 || !leftMapRef.current || !rightMapRef.current) return;
+    const routeKey = selectedDrive?.id || `${refLat}:${refLon}`;
+    if (
+      !routePoints || routePoints.length === 0 ||
+      !leftMapRef.current || !rightMapRef.current ||
+      fittedRouteRef.current === routeKey
+    ) return;
 
-    const gtCoords = history.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
+    const gtCoords = routePoints.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
     if (gtCoords.length > 1) {
       const bounds = L.latLngBounds(gtCoords);
-      leftMapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+      // The left map mirrors this completed move through the guarded sync path.
       rightMapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+      fittedRouteRef.current = routeKey;
 
       // Set static Ground Truth Corridor and Outage bounds
       leftLayersRef.current.gtCorridor.setLatLngs(gtCoords);
       rightLayersRef.current.gtCorridor.setLatLngs(gtCoords);
 
-      const outagePts = history.filter(pt => pt.isOutage);
+      const outagePts = routePoints.filter(pt => pt.isOutage);
       if (outagePts.length > 1) {
         const outCoords = outagePts.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
         leftLayersRef.current.outagePolyline.setLatLngs(outCoords);
@@ -269,14 +291,13 @@ export default function SplitScreenMap({
         rightLayersRef.current.egressMarker.setLatLng(egCoord).addTo(rightMapRef.current);
       }
     }
-  }, [history, refLat, refLon]);
+  }, [routePoints, refLat, refLon, selectedDrive?.id]);
 
   // Real-Time Frame Update Loop (High-Performance 60fps, Zero-Jitter)
   useEffect(() => {
     if (!currentPoint || !history || history.length === 0) return;
 
-    const curIndex = history.findIndex(pt => pt.t === currentPoint.t);
-    const activeSlice = curIndex >= 0 ? history.slice(0, curIndex + 1) : history.filter(pt => pt.t <= currentPoint.t);
+    const activeSlice = history;
     if (activeSlice.length === 0) return;
 
     const curHeading = currentPoint.heading_deg || 0;
@@ -295,7 +316,12 @@ export default function SplitScreenMap({
 
     // 2. Update Right Map (Pre-MM Fused + Post-MM Snapped)
     const fusedCoords = activeSlice.map(pt => enuToLatLon(pt.fused_x !== undefined ? pt.fused_x : pt.gt_x, pt.fused_y !== undefined ? pt.fused_y : pt.gt_y, refLat, refLon));
-    const snappedCoords = activeSlice.map(pt => enuToLatLon(pt.snapped_x !== undefined ? pt.snapped_x : (pt.fused_x || pt.gt_x), pt.snapped_y !== undefined ? pt.snapped_y : (pt.fused_y || pt.gt_y), refLat, refLon));
+    const snappedCoords = activeSlice.map(pt => enuToLatLon(
+      pt.snapped_x ?? pt.fused_x ?? pt.gt_x,
+      pt.snapped_y ?? pt.fused_y ?? pt.gt_y,
+      refLat,
+      refLon
+    ));
     const curSnappedPos = snappedCoords[snappedCoords.length - 1];
 
     if (rightLayersRef.current.fusedPolyline) {
@@ -326,8 +352,8 @@ export default function SplitScreenMap({
         [bounds.getNorth() - padLat, bounds.getEast() - padLng]
       );
       if (!innerBounds.contains(curSnappedPos)) {
+        map.stop();
         map.panTo(curSnappedPos, { animate: true, duration: 0.6, easeLinearity: 0.25 });
-        leftMapRef.current.panTo(curSnappedPos, { animate: true, duration: 0.6, easeLinearity: 0.25 });
       }
     }
   }, [currentPoint, history, followVehicle, refLat, refLon]);
@@ -335,7 +361,6 @@ export default function SplitScreenMap({
   const handleRecenter = useCallback(() => {
     if (!currentPoint || !leftMapRef.current || !rightMapRef.current) return;
     const curPos = enuToLatLon(currentPoint.snapped_x || currentPoint.gt_x, currentPoint.snapped_y || currentPoint.gt_y, refLat, refLon);
-    leftMapRef.current.setView(curPos, 18, { animate: true });
     rightMapRef.current.setView(curPos, 18, { animate: true });
     setFollowVehicle(true);
   }, [currentPoint, refLat, refLon]);

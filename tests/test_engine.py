@@ -135,17 +135,35 @@ class TestEngineStreamingIntegration:
         engine.push_gnss(lat=12.9716, lon=77.5946, alt=920.0,
                          speed_mps=16.0, heading_deg=0.0, accuracy_m=2.0, timestamp=0.0)
 
-        # Drive north with 10Hz IMU for 2 seconds
+        # Drive north with 10Hz IMU for 2 seconds and retain a 1 Hz GNSS lock.
         t = 0.0
         state = None
         for i in range(20):
             t += 0.1
+            if i == 9:
+                engine.push_gnss(lat=12.97161, lon=77.5946, alt=920.0,
+                                 speed_mps=16.0, heading_deg=0.0, accuracy_m=2.0, timestamp=t)
             state = engine.push_imu(ax=1.0, ay=0.0, az=9.81, gx=0.0, gy=0.0, gz=0.0, timestamp=t)
 
         assert state is not None
         assert state.status == GNSSStatus.GNSS_LOCKED
         e_x, e_y = engine.latlon_to_enu(state.latitude, state.longitude)
         assert e_y > 0.0 or state.latitude >= 12.9716
+
+    def test_zero_timestamp_gnss_transitions_to_outage(self):
+        """A valid GNSS fix at t=0 must not disable outage detection."""
+        engine = NavResilientEngine(fs_imu=10.0)
+        engine.push_gnss(lat=12.9716, lon=77.5946, alt=920.0,
+                         speed_mps=10.0, heading_deg=0.0, accuracy_m=2.0, timestamp=0.0)
+
+        state = None
+        for i in range(13):
+            t = (i + 1) * 0.1
+            state = engine.push_imu(ax=0.0, ay=0.0, az=9.81,
+                                    gx=0.0, gy=0.0, gz=0.0, timestamp=t)
+
+        assert state is not None
+        assert state.status == GNSSStatus.GNSS_DENIED_INS
 
 
 class TestEKFUKFAndAIResidual:
@@ -181,6 +199,15 @@ class TestEKFUKFAndAIResidual:
 
 
 class TestHMMMapMatching:
+    def test_long_road_segment_is_found_near_its_endpoint(self):
+        """Midpoint KD-tree pruning must not hide long OSM road ways."""
+        from navresilient.mapmatching import OSMGraphLoader
+        loader = OSMGraphLoader()
+        loader.add_edge_cartesian("start", "end", np.array([0.0, 0.0]), np.array([1000.0, 0.0]))
+
+        candidates = loader.query_candidate_edges(np.array([995.0, 4.0]), radius_m=10.0)
+
+        assert len(candidates) == 1
     def test_road_graph_loading_and_snapping(self):
         import numpy as np
         from navresilient.mapmatching import OSMGraphLoader, HMMMapMatcher

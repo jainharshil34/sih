@@ -265,6 +265,7 @@ export default function App() {
               <SplitScreenMap
                 currentPoint={currentPoint}
                 history={history}
+                routePoints={drivePoints}
                 isOutage={isOutage}
                 distanceTraveled={totalDistance}
                 driftPct={driftPct}
