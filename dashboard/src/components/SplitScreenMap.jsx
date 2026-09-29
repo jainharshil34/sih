@@ -284,32 +284,16 @@ export default function SplitScreenMap({
       rightMapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
       fittedRouteRef.current = routeKey;
 
-      // Set static Ground Truth Corridor and Outage bounds
-      leftLayersRef.current.gtCorridor.setLatLngs(gtCoords);
-      rightLayersRef.current.gtCorridor.setLatLngs(gtCoords);
+      // Keep static corridor empty so no path pre-exists before the vehicle actually drives
+      leftLayersRef.current.gtCorridor.setLatLngs([]);
+      rightLayersRef.current.gtCorridor.setLatLngs([]);
+      leftLayersRef.current.outagePolyline.setLatLngs([]);
+      rightLayersRef.current.outagePolyline.setLatLngs([]);
 
-      const outagePts = routePoints.filter(pt => pt.isOutage);
-      if (outagePts.length > 1) {
-        const outCoords = outagePts.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
-        leftLayersRef.current.outagePolyline.setLatLngs(outCoords);
-        rightLayersRef.current.outagePolyline.setLatLngs(outCoords);
-
-        // Position Ingress and Egress Pins
-        const ingCoord = outCoords[0];
-        const egCoord = outCoords[outCoords.length - 1];
-
-        leftLayersRef.current.ingressMarker.setLatLng(ingCoord).addTo(leftMapRef.current);
-        leftLayersRef.current.egressMarker.setLatLng(egCoord).addTo(leftMapRef.current);
-        rightLayersRef.current.ingressMarker.setLatLng(ingCoord).addTo(rightMapRef.current);
-        rightLayersRef.current.egressMarker.setLatLng(egCoord).addTo(rightMapRef.current);
-      } else {
-        leftLayersRef.current.outagePolyline.setLatLngs([]);
-        rightLayersRef.current.outagePolyline.setLatLngs([]);
-        if (leftLayersRef.current.ingressMarker) leftLayersRef.current.ingressMarker.remove();
-        if (leftLayersRef.current.egressMarker) leftLayersRef.current.egressMarker.remove();
-        if (rightLayersRef.current.ingressMarker) rightLayersRef.current.ingressMarker.remove();
-        if (rightLayersRef.current.egressMarker) rightLayersRef.current.egressMarker.remove();
-      }
+      if (leftLayersRef.current.ingressMarker) leftLayersRef.current.ingressMarker.remove();
+      if (leftLayersRef.current.egressMarker) leftLayersRef.current.egressMarker.remove();
+      if (rightLayersRef.current.ingressMarker) rightLayersRef.current.ingressMarker.remove();
+      if (rightLayersRef.current.egressMarker) rightLayersRef.current.egressMarker.remove();
     }
   }, [routePoints, refLat, refLon, selectedDrive?.id]);
 
@@ -354,6 +338,17 @@ export default function SplitScreenMap({
       rightLayersRef.current.vehicleMarker.setLatLng(curSnappedPos);
       rightLayersRef.current.vehicleMarker.setIcon(createVehicleIcon('#059669', curHeading));
     }
+    // Outage segment dynamic highlight
+    const outageSlice = activeSlice.filter(pt => pt.isOutage);
+    if (outageSlice.length > 1) {
+      const outageCoords = outageSlice.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
+      if (leftLayersRef.current.outagePolyline) leftLayersRef.current.outagePolyline.setLatLngs(outageCoords);
+      if (rightLayersRef.current.outagePolyline) rightLayersRef.current.outagePolyline.setLatLngs(outageCoords);
+    } else {
+      if (leftLayersRef.current.outagePolyline) leftLayersRef.current.outagePolyline.setLatLngs([]);
+      if (rightLayersRef.current.outagePolyline) rightLayersRef.current.outagePolyline.setLatLngs([]);
+    }
+
     if (rightLayersRef.current.uncertaintyCircle) {
       const errMeters = Math.max(1.8, currentPoint.fused_err || 2.5);
       rightLayersRef.current.uncertaintyCircle.setLatLng(curSnappedPos);
