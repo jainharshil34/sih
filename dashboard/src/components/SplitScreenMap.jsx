@@ -247,10 +247,18 @@ export default function SplitScreenMap({
       rightMap.off('moveend', syncRightToLeft);
       leftMap.off('dragstart', pauseFollow);
       rightMap.off('dragstart', pauseFollow);
+      
+      // Remove pin markers if present
+      if (lLayers.ingressMarker) lLayers.ingressMarker.remove();
+      if (lLayers.egressMarker) lLayers.egressMarker.remove();
+      if (rLayers.ingressMarker) rLayers.ingressMarker.remove();
+      if (rLayers.egressMarker) rLayers.egressMarker.remove();
+
       leftMap.remove();
       rightMap.remove();
       leftMapRef.current = null;
       rightMapRef.current = null;
+      fittedRouteRef.current = null;
     };
   }, [refLat, refLon, selectedDrive?.id]);
 
@@ -263,6 +271,11 @@ export default function SplitScreenMap({
       !leftMapRef.current || !rightMapRef.current ||
       fittedRouteRef.current === routeKey
     ) return;
+
+    // Clear previous drive trajectories immediately
+    if (leftLayersRef.current.rawPolyline) leftLayersRef.current.rawPolyline.setLatLngs([]);
+    if (rightLayersRef.current.fusedPolyline) rightLayersRef.current.fusedPolyline.setLatLngs([]);
+    if (rightLayersRef.current.snappedPolyline) rightLayersRef.current.snappedPolyline.setLatLngs([]);
 
     const gtCoords = routePoints.map(pt => enuToLatLon(pt.gt_x, pt.gt_y, refLat, refLon));
     if (gtCoords.length > 1) {
@@ -289,6 +302,13 @@ export default function SplitScreenMap({
         leftLayersRef.current.egressMarker.setLatLng(egCoord).addTo(leftMapRef.current);
         rightLayersRef.current.ingressMarker.setLatLng(ingCoord).addTo(rightMapRef.current);
         rightLayersRef.current.egressMarker.setLatLng(egCoord).addTo(rightMapRef.current);
+      } else {
+        leftLayersRef.current.outagePolyline.setLatLngs([]);
+        rightLayersRef.current.outagePolyline.setLatLngs([]);
+        if (leftLayersRef.current.ingressMarker) leftLayersRef.current.ingressMarker.remove();
+        if (leftLayersRef.current.egressMarker) leftLayersRef.current.egressMarker.remove();
+        if (rightLayersRef.current.ingressMarker) rightLayersRef.current.ingressMarker.remove();
+        if (rightLayersRef.current.egressMarker) rightLayersRef.current.egressMarker.remove();
       }
     }
   }, [routePoints, refLat, refLon, selectedDrive?.id]);

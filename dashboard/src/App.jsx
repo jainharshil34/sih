@@ -12,7 +12,10 @@ import { REAL_DRIVES } from './data/driveData';
 export default function App() {
   const [activeTab, setActiveTab] = useState('mission');
   const [selectedDriveId, setSelectedDriveId] = useState('my-ride');
-  const [drivePoints, setDrivePoints] = useState([]);
+  const [drivePoints, setDrivePoints] = useState(() => {
+    const drive = REAL_DRIVES['my-ride'] || REAL_DRIVES['S-Vw12'];
+    return drive ? drive.generatePoints() : [];
+  });
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -26,13 +29,14 @@ export default function App() {
   const [recordedFramesCount, setRecordedFramesCount] = useState(0);
   const recordedSessionRef = useRef([]);
 
-  // Load drive data on drive selection change
-  useEffect(() => {
-    const drive = REAL_DRIVES[selectedDriveId] || REAL_DRIVES['S-Vw12'];
-    const pts = drive.generatePoints();
-    setDrivePoints(pts);
+  // Handle drive selection change with instant clean state reset
+  const handleSelectDrive = (newDriveId) => {
+    setSelectedDriveId(newDriveId);
+    const drive = REAL_DRIVES[newDriveId] || REAL_DRIVES['S-Vw12'];
+    setDrivePoints(drive ? drive.generatePoints() : []);
     setCurrentIndex(0);
-  }, [selectedDriveId]);
+    setManualOutage(null);
+  };
 
   // Real-Time Playback Tick Loop
   useEffect(() => {
@@ -238,7 +242,7 @@ export default function App() {
         latencyMs={latencyMs}
         isStreaming={isPlaying}
         selectedDriveId={selectedDriveId}
-        setSelectedDriveId={setSelectedDriveId}
+        setSelectedDriveId={handleSelectDrive}
         drives={REAL_DRIVES}
       />
 
@@ -263,6 +267,7 @@ export default function App() {
             {/* Left 2 Cols: Split Screen Map */}
             <div className="xl:col-span-2 min-h-[520px]">
               <SplitScreenMap
+                key={selectedDriveId}
                 currentPoint={currentPoint}
                 history={history}
                 routePoints={drivePoints}
