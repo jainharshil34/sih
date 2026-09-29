@@ -231,9 +231,74 @@ class TCNVelocity:
         A = Fs.T @ Fs + 0.5 * np.eye(Fs.shape[1])
         self.ridge_w = np.linalg.solve(A, Fs.T @ Y)
 
+        # Dynamic Dataset Auto-Adapter Parameters (Learned Online per Vehicle/Log)
+        self.adapted = False
+        self.scale_alpha = 1.0
+        self.bias_beta = 0.0
+        self.max_observed_speed = 35.0
+        self.idle_vib_threshold = 0.35
+        self.calibrated_var = 0.20
+
+    def adapt_online(self, acc_history: np.ndarray, gyro_history: np.ndarray,
+                     gps_speed_history: np.ndarray, fs: float):
+        """Automatically adapt TCN model parameters to any dataset, vehicle dynamics, or mount.
+        
+        Args:
+            acc_history: (N, 3) vehicle-frame linear/calibrated acceleration history.
+            gyro_history: (N, 3) vehicle-frame angular rate history.
+            gps_speed_history: (N,) ground-truth GNSS speed observed during fix.
+            fs: sampling frequency (Hz).
+        """
+        if len(gps_speed_history) < int(fs * 1.5):
+            return
+
+        valid_mask = np.isfinite(gps_speed_history)
+        if np.sum(valid_mask) < 10:
+            return
+
+        spd_valid = gps_speed_history[valid_mask]
+        self.max_observed_speed = max(3.0, float(np.max(spd_valid)) * 1.25)
+        self.mean_v = float(np.mean(spd_valid))
+
+        # 1. Compute empirical idle vibration threshold during near-zero speed
+        zero_mask = (spd_valid < 0.3)
+        if np.sum(zero_mask) >= 5:
+            zero_indices = np.where(valid_mask)[0][zero_mask]
+            acc_zero = acc_history[zero_indices]
+            vib_norms = np.linalg.norm(acc_zero, axis=1)
+            self.idle_vib_threshold = float(np.percentile(vib_norms, 85)) + 0.15
+
+        # 2. Extract windows and solve optimal affine scale/bias transfer
+        X_w, idx = extract_imu_windows(acc_history, gyro_history, fs, self.win_s)
+        if len(X_w) >= 5:
+            target_y = gps_speed_history[idx]
+            ok = np.isfinite(target_y)
+            if np.sum(ok) >= 5:
+                X_fit = X_w[ok]
+                Y_fit = target_y[ok].astype(np.float32)
+
+                # Get base neural predictions
+                with torch.no_grad():
+                    tx = torch.from_numpy(X_fit).float().to(self.device)
+                    pv, _ = self.model(tx)
+                    v_raw = pv.squeeze(-1).cpu().numpy()
+
+                # Robust regularized 1D fit: Y = alpha * v_raw + beta
+                M = np.column_stack([v_raw, np.ones_like(v_raw)])
+                reg = 1.0 * np.eye(2)
+                params, _, _, _ = np.linalg.lstsq(M.T @ M + reg, M.T @ Y_fit, rcond=None)
+                self.scale_alpha = float(np.clip(params[0], 0.05, 3.0))
+                self.bias_beta = float(np.clip(params[1], -10.0, 10.0))
+
+                # Empirical residual variance
+                fitted_v = np.clip(self.scale_alpha * v_raw + self.bias_beta, 0.0, self.max_observed_speed)
+                residuals = Y_fit - fitted_v
+                self.calibrated_var = float(np.clip(np.var(residuals), 0.02, 2.5))
+                self.adapted = True
+
     def predict(self, acc_v: np.ndarray, gyro_v: np.ndarray, fs: float,
                 n_out: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Predict forward speed (m/s) and estimated variance sigma_v^2 (m^2/s^2)."""
+        """Predict forward speed (m/s) and estimated variance sigma_v^2 (m^2/s^2) with auto-adaptation."""
         if not self.is_fitted:
             return np.full(n_out, self.mean_v), np.full(n_out, 0.25)
 
@@ -241,7 +306,7 @@ class TCNVelocity:
         if len(idx) == 0:
             return np.full(n_out, self.mean_v), np.full(n_out, 0.25)
 
-        # 1. Primary path: Deep PyTorch TCN inference
+        # 1. Primary path: Pure Deep PyTorch TCN Neural Inference
         if self.is_fitted_torch and self.model is not None and TORCH_AVAILABLE:
             try:
                 self.model.eval()
@@ -249,8 +314,7 @@ class TCNVelocity:
                     tx = torch.from_numpy(X_w).float().to(self.device)
                     pv, lv = self.model(tx)
                     v_arr = np.maximum(pv.squeeze(-1).cpu().numpy(), 0.0)
-                    # Variance = exp(log_var). Increase var when confidence is low to avoid pulling UKF incorrectly
-                    var_arr = np.maximum(np.exp(lv.squeeze(-1).cpu().numpy()), 0.05)
+                    var_arr = np.maximum(np.exp(lv.squeeze(-1).cpu().numpy()), 0.01)
 
                     out_v = np.full(n_out, np.nan)
                     out_var = np.full(n_out, np.nan)
@@ -276,7 +340,7 @@ class TCNVelocity:
                 ]))
             F = np.asarray(feats, dtype=np.float32)
             Fs = np.column_stack([(F - self.feature_mu) / self.feature_sd, np.ones(len(F))])
-            v_arr = np.maximum(Fs @ self.ridge_w, 0.0)
+            v_arr = np.clip(Fs @ self.ridge_w, 0.0, self.max_observed_speed)
             var_arr = np.full(len(v_arr), 0.20, dtype=np.float32)
 
             out_v = np.full(n_out, np.nan)

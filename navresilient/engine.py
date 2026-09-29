@@ -250,7 +250,7 @@ class NavResilientEngine:
                     getattr(self, "current_gnss_speed", 0.0)
                 )
 
-            # Continuous Pre-Outage Calibration (every 1.0s while GNSS locked)
+            # Continuous Pre-Outage Calibration & Model Adaptation (every 1.0s while GNSS locked)
             if self.enable_calibration and len(self.speed_history) >= 15 and len(self.acc_v_history) % 10 == 0:
                 arr_raw_a = np.array(self.acc_v_history)[:len(self.speed_history)]
                 arr_raw_w = np.array(self.gyro_v_history)[:len(self.speed_history)]
@@ -259,6 +259,12 @@ class NavResilientEngine:
                 self.calibrator.calibrate(arr_raw_a, arr_raw_w, arr_spd, arr_crs)
                 self.heading_filter.gyro_sign = self.calibrator.gyro_sign
                 self.heading_filter.gyro_bias = self.calibrator.gyro_bias
+
+                # Dynamic online transfer adaptation
+                if self.enable_ai_velocity:
+                    arr_a_veh = np.array([self.calibrator.transform_to_vehicle_frame(a, w)[0] for a, w in zip(arr_raw_a, arr_raw_w)])
+                    arr_w_veh = np.array([self.calibrator.transform_to_vehicle_frame(a, w)[1] for a, w in zip(arr_raw_a, arr_raw_w)])
+                    self.velocity_model.adapt_online(arr_a_veh, arr_w_veh, arr_spd, self.fs_imu)
 
         is_stationary = False
         regime = MotionRegime.SMOOTH_CRUISE
@@ -325,9 +331,9 @@ class NavResilientEngine:
                         self.heading_filter.gyro_bias = gbias
                         self.ukf.ukf.x[5] = 0.0
 
-                    # Fit online velocity model on recent GNSS-locked drive history
-                    if self.enable_ai_velocity and not self.velocity_model.is_fitted:
-                        self.velocity_model.fit([(arr_a_veh, arr_w_veh)], [arr_spd], self.fs_imu)
+                    # Adapt velocity model on recent GNSS-locked drive history
+                    if self.enable_ai_velocity:
+                        self.velocity_model.adapt_online(arr_a_veh, arr_w_veh, arr_spd, self.fs_imu)
 
         # 4. Pipeline Stage 3: Smarter AI Velocity Estimation & Gating (Priority 4)
         v_ai = None

@@ -11,7 +11,7 @@ import { REAL_DRIVES } from './data/driveData';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('mission');
-  const [selectedDriveId, setSelectedDriveId] = useState('S-Vw12');
+  const [selectedDriveId, setSelectedDriveId] = useState('my-ride');
   const [drivePoints, setDrivePoints] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
