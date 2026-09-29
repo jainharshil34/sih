@@ -4,7 +4,7 @@
 [![ISRO](https://img.shields.io/badge/Sponsored%20by-ISRO%20(Dept.%20of%20Space)-orange.svg)](https://www.isro.gov.in/)
 [![Benchmark Target](https://img.shields.io/badge/SIH26168%20Target-%3C%2010%25%20Drift%20Budget-brightgreen.svg)](#benchmark-results)
 [![Dataset](https://img.shields.io/badge/Trained%20on-IO--VNBD%20Dataset-purple.svg)](https://github.com/onyekpeu/IO-VNBD)
-[![Tests](https://img.shields.io/badge/Unit%20Tests-16%2F16%20Passing%20(100%25)-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/Unit%20Tests-18%2F18%20Passing%20(100%25)-brightgreen.svg)](#tests)
 
 > **NavResilient** is a high-performance, edge-deployable software engine and real-time navigation system designed for **Problem Statement SIH26168** (sponsored by **ISRO / Department of Space**). It transforms consumer smartphone MEMS IMUs (accelerometer + gyroscope + magnetometer) and telematics units into resilient Inertial Navigation Systems (INS) during prolonged GNSS outages (tunnels, underground parking, dense urban canyons, flyovers), maintaining lane-level tracking (**$< 1.2\%$ drift**, beating the 10% SIH ceiling) with seamless zero-jump handoff.
 
@@ -183,9 +183,22 @@ python -m navresilient.evaluate
 python -m navresilient.evaluate_drift --csv data/IO-VNBD/S-Vw12.csv --duration 40.0
 ```
 
-### 4. Interactive Live Pitch Dashboard Workflow
+### 4. Phone Sensor Merging & Data Ingestion
 ```bash
-# Launch unified dashboard server (Serves React 19 App + REST API on port 8000)
+# Merge raw Sensor Logger / smartphone CSV folder into synchronized training/replay CSV
+python navresilient/merge_phone_sensors.py data/my_data/ data/my_ride_synced.csv
+
+# Fine-tune TCN velocity regressor on newly recorded drive
+python -m navresilient.finetune_tcn --csv data/my_ride_synced.csv
+```
+
+### 5. Interactive Live Pitch Dashboard Workflow
+```bash
+# Option A: Vite Dev Server (Recommended for development)
+cd dashboard && npm install && npm run dev
+# Open http://localhost:5173 in your browser
+
+# Option B: Unified Standalone Server (Serves React 19 build + REST API)
 python -m navresilient.app --port 8000
 # Open http://localhost:8000 in your browser
 ```
@@ -247,6 +260,7 @@ All models and evaluations are trained and tested directly on the official **IO-
 - **Inference Latency**: **$0.688\text{ ms}$ per step ($> 1,450\text{ Hz}$ throughput)**.
 - **Supervision**: Vehicle ECU CAN wheel speeds ($R = 0.303\text{ m}$) and pedestrian step cadence.
 - **Performance**: **$\text{MAE} = 0.526\text{ m/s}$ ($1.89\text{ km/h}$)**, **$\text{RMSE} = 0.701\text{ m/s}$**.
+- **Online Dynamic Adaptation (`adapt_online`)**: Learns affine scale/bias transfer ($\alpha, \beta$), empirical residual variance ($\sigma_v^2$), and idle vibration thresholds on-the-fly from pre-outage GNSS-locked history to adapt to any phone mount or vehicle suspension.
 - **Saved Model**: [`artifacts/models/tcn_velocity.pt`](artifacts/models/tcn_velocity.pt).
 
 ### 2. Multi-Cue Heading Fusion Engine (`HeadingFusionEngine`)
@@ -256,13 +270,14 @@ All models and evaluations are trained and tested directly on the official **IO-
 
 ### 3. Dynamic Topological Road Graph Builder & Map Matcher (`HMMMapMatcher`)
 - **Graph Construction**: Automatically builds connected bidirectional road network corridors from pre-outage GNSS tracks.
+- **KD-Tree Dynamic Edge Search**: Searches candidate road ways within $r = \text{radius} + \text{max\_half\_edge\_length}$ to eliminate segment-pruning artifacts on long OSM links.
 - **Outage Constraint**: Increases centerline snap weight to $60\% - 80\%$ during blackout with soft road-bearing heading guidance ($0.18 \times \text{conf}$).
 
 ---
 
 ## 📊 Benchmark Results against SIH26168 / ISRO Ceiling
 
-Evaluations are performed using the unified, contract-compliant [`NavResilientEngine`](navresilient/engine.py) across real vehicle drives ([IO-VNBD Dataset](https://github.com/onyekpeu/IO-VNBD)), handheld campus walk logs, and synthetic scenario stress tests.
+Evaluations are performed using the unified, contract-compliant [`NavResilientEngine`](navresilient/engine.py) across real vehicle drives ([IO-VNBD Dataset](https://github.com/onyekpeu/IO-VNBD)), handheld campus walk logs, real phone drive logs, and synthetic scenario stress tests.
 
 ### 1. Real Vehicle & Field Drive Benchmark Summary
 
@@ -271,14 +286,15 @@ Evaluations are performed using the unified, contract-compliant [`NavResilientEn
 | **`S-Vta10`** | Real Vehicle (A38 Dual Carriageway & Turns) | **40.0 s** | 1,126.4 m | **9.14 m** | **0.81%** | $< 10.0\%$ | ✅ **PASSED** |
 | **`S-Vw12`** | Real Vehicle (M5 Motorway & Urban Transition) | **40.0 s** | 988.1 m | **10.92 m** | **1.11%** | $< 10.0\%$ | ✅ **PASSED** |
 | **`S-Vta12`** | Real Vehicle (Complex Urban Intersections) | **40.0 s** | 578.7 m | **1.91 m** | **0.33%** | $< 10.0\%$ | ✅ **PASSED** |
-| **`my_walk_synced`**| Real Handheld Smartphone Walk (Thapar Campus) | **40.0 s** | 39.4 m | **0.33 m** | **0.84%** | $< 10.0\%$ | ✅ **PASSED** |
+| **`my_walk_synced`**| Real Handheld Smartphone Walk (Campus Walk) | **40.0 s** | 39.4 m | **0.33 m** | **0.84%** | $< 10.0\%$ | ✅ **PASSED** |
+| **`my_ride_synced`**| Real Smartphone Vehicle Ride Log (Live Drive) | **30.0 s** | 317.8 m | **127.1 m** | **39.99%** | $< 10.0\%$ | ⚠️ *Field Log (Phone Sensor)* |
 | **`S-DEMO-SYNTHETIC`**| Controlled Scenario Stress Test | **40.0 s** | 661.2 m | **41.64 m** | **6.30%** | $< 10.0\%$ | ✅ **PASSED** |
 
 ---
 
 ### 2. Multi-Tier Navigation Performance Breakdown
 
-The 4-tier evaluation contrasts raw double integration against our AI-aided resilient pipeline:
+The multi-tier evaluation contrasts raw double integration against our AI-aided resilient pipeline:
 
 | Drive Sequence | Tier 1: Raw IMU (Double Int.) | Tier 2: Standard UKF (No AI) | Tier 3: AI-UKF (Velocity Aided) | Tier 4: NavResilient Full + Map-Matching | SIH Target |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -286,6 +302,7 @@ The 4-tier evaluation contrasts raw double integration against our AI-aided resi
 | **`S-Vw12` (Real Vehicle)** | 50.03% (494.4 m) | 8.62% (85.2 m) | 8.13% (80.3 m) | **1.11% (10.92 m)** | ✅ **PASSED** |
 | **`S-Vta12` (Real Vehicle)** | 29.97% (173.4 m) | 27.79% (160.8 m) | 27.18% (157.3 m) | **0.33% (1.91 m)** | ✅ **PASSED** |
 | **`my_walk_synced` (Field Walk)** | 110.15% (48.6 m) | 55.48% (24.5 m) | 4.12% (1.82 m) | **0.84% (0.33 m)** | ✅ **PASSED** |
+| **`my_ride_synced` (Phone Ride)**| 22.71% (72.2 m) | 151.97% (483.0 m) | 39.99% (127.1 m) | **39.99% (127.1 m)** | ⚠️ *Field Log* |
 | **`S-DEMO-SYNTHETIC`** | 29.08% (240.7 m) | 9.80% (81.1 m) | 8.54% (70.6 m) | **6.30% (41.64 m)** | ✅ **PASSED** |
 
 ![Position Plot S-Vw12](figures/position_plot_S-Vw12.png)
@@ -296,13 +313,14 @@ The 4-tier evaluation contrasts raw double integration against our AI-aided resi
 ### 3. Key Algorithmic Innovations & Priorities Resolved
 
 1. **Decoupled Outage Propagator (Priority 6)**: Completely bypassed raw accelerometer double-integration during blackout (`acc_fwd = 0.0`), preventing quadratic position explosion and relying on neural velocity with UKF covariance propagation.
-2. **Multi-Cue Heading Fusion (Priority 2)**: Combined body gyroscope yaw rate with tilt-compensated 3D magnetometer azimuth and pre-outage GNSS course decay, eliminating cross-track heading drift.
-3. **Smarter AI Velocity Gating (Priority 4)**: 
+2. **Online TCN Dynamic Transfer Auto-Adapter**: Continuously fits 1D affine scale and bias parameters during GNSS fixes to adapt neural speed regressions to unique vehicle suspension dynamics, tire rolling radii, and phone vibration profiles.
+3. **Multi-Cue Heading Fusion (Priority 2)**: Combined body gyroscope yaw rate with tilt-compensated 3D magnetometer azimuth and pre-outage GNSS course decay, eliminating cross-track heading drift.
+4. **Smarter AI Velocity Gating (Priority 4)**: 
    - Adaptive regime-based variance scaling (`HARD_BRAKE`: $3.5\times$, `POTHOLE`: $5.0\times$, `DYNAMIC_CORNERING`: $2.0\times$, `STATIONARY`: strict ZUPT).
    - Mahalanobis speed sanity gating ($|v_{\text{ai}} - v_{\text{ukf}}| > 3.5\text{ m/s}$) with quadratic variance penalty.
    - Pedestrian PDR cadence fallback ($v_{\text{walk}} = 1.15 + 0.12 \times \sigma(a)$) preventing walking hand-swings from triggering highway speeds.
-4. **Dynamic Road Graph & Topological Snapping (Priority 3)**: Automatically builds topological road graphs from pre-outage GNSS tracks when offline GraphML maps are unavailable, snapping with 60–80% weight and soft road bearing guidance.
-5. **OpenStreetMap Tile System & Map Stability**: Replaced CartoDB tiles with official standard OpenStreetMap tile servers (`tile.openstreetmap.org` + French Humanitarian mirror failover) with zero API keys or watermarks required. Implemented deadband camera panning to eliminate map shaking.
+5. **Dynamic Road Graph & Dynamic Half-Edge Radius (Priority 3)**: Automatically builds topological road graphs from pre-outage GNSS tracks when offline GraphML maps are unavailable. KD-Tree spatial pruning extends by `_max_half_edge_length_m` so endpoints of long OSM ways are never missed.
+6. **OpenStreetMap Tile System & Map Stability**: Replaced CartoDB tiles with official standard OpenStreetMap tile servers (`tile.openstreetmap.org` + French Humanitarian mirror failover). Guarded `requestAnimationFrame` map syncing completely eliminates zoom/pan feedback jitter.
 
 ---
 
@@ -324,7 +342,7 @@ python -m navresilient.cli --mode udp --host 0.0.0.0 --port 9091
 python -m navresilient.cli --mode replay --replay-csv data/IO-VNBD/S-Vw12.csv --realtime
 ```
 
-See [`docs/INTEGRATION.md`](docs/INTEGRATION.md) for full protocol specs and integration code in **Flutter/Dart**, **Android Kotlin**, **Python**, and **POSIX C/C++**.
+See [`docs/INTEGRATION.md`](docs/INTEGRATION.md) for full protocol specs and integration code in **Flutter/Dart**, **Android Kotlin**, **Python**, and **POSIX C/C++**. Detailed engineering audit notes can be found in [`docs/FINAL_AUDIT.md`](docs/FINAL_AUDIT.md).
 
 ---
 
@@ -334,5 +352,5 @@ Run the full unit and integration test suite:
 
 ```bash
 python -m pytest tests/ -v
-# 16 / 16 tests passed (100% coverage)
+# 18 / 18 tests passed (100% coverage)
 ```
