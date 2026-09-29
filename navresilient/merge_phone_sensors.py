@@ -21,7 +21,7 @@ import pandas as pd
 
 def _find_csv(folder: str, keywords: list[str]) -> Optional[str]:
     """Find a CSV file in folder whose basename contains any of the keywords (case-insensitive)."""
-    for fname in os.listdir(folder):
+    for fname in sorted(os.listdir(folder)):
         if not fname.lower().endswith(".csv"):
             continue
         low = fname.lower()
@@ -34,7 +34,11 @@ def _get_time_col(df: pd.DataFrame) -> str:
     """Identify the timestamp column in a dataframe."""
     for col in df.columns:
         low = col.lower().strip()
-        if any(k in low for k in ["seconds_elapsed", "time_since_start", "time", "timestamp", "epoch"]):
+        if "seconds_elapsed" in low or "time_since_start" in low:
+            return col
+    for col in df.columns:
+        low = col.lower().strip()
+        if any(k in low for k in ["timestamp", "epoch", "time"]):
             return col
     return df.columns[0]
 
@@ -46,10 +50,21 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
 
     print(f"Scanning '{folder_path}' for sensor CSV files...")
 
-    acc_path = _find_csv(folder_path, ["accel", "totalacceleration"])
-    gyro_path = _find_csv(folder_path, ["gyro"])
+    # Exclude uncalibrated if calibrated exists
+    all_csvs = [f for f in os.listdir(folder_path) if f.lower().endswith(".csv")]
+    acc_cand = [f for f in all_csvs if "accel" in f.lower() or "totalacceleration" in f.lower()]
+    acc_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
+    acc_path = os.path.join(folder_path, acc_cand[0]) if acc_cand else None
+
+    gyro_cand = [f for f in all_csvs if "gyro" in f.lower()]
+    gyro_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
+    gyro_path = os.path.join(folder_path, gyro_cand[0]) if gyro_cand else None
+
     loc_path = _find_csv(folder_path, ["loc", "gps", "position"])
     grav_path = _find_csv(folder_path, ["grav"])
+    mag_cand = [f for f in all_csvs if "mag" in f.lower()]
+    mag_cand.sort(key=lambda x: ("uncalibrated" in x.lower(), len(x)))
+    mag_path = os.path.join(folder_path, mag_cand[0]) if mag_cand else None
 
     if not acc_path:
         raise FileNotFoundError("Could not find Accelerometer CSV file in the folder.")
@@ -130,6 +145,20 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
             out_dict["gravity y"] = np.interp(t_uniform, t_grav, df_grav[gy_c].values)
             out_dict["gravity z"] = np.interp(t_uniform, t_grav, df_grav[gz_c].values)
 
+    # If Magnetometer CSV exists
+    if mag_path:
+        df_mag = pd.read_csv(mag_path)
+        t_mag = df_mag[_get_time_col(df_mag)].values.astype(float)
+        if t_mag[0] > 1e11:
+            t_mag = (t_mag - t_mag[0]) / (1e9 if t_mag[0] > 1e14 else 1e3)
+        else:
+            t_mag = t_mag - t_mag[0]
+        mx_c, my_c, mz_c = _find_xyz_cols(df_mag)
+        if mx_c and my_c and mz_c:
+            out_dict["magnetic field x"] = np.interp(t_uniform, t_mag, df_mag[mx_c].values)
+            out_dict["magnetic field y"] = np.interp(t_uniform, t_mag, df_mag[my_c].values)
+            out_dict["magnetic field z"] = np.interp(t_uniform, t_mag, df_mag[mz_c].values)
+
     # If Location/GPS CSV exists
     if loc_path:
         df_loc = pd.read_csv(loc_path)
@@ -141,7 +170,9 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
 
         lat_c = next((c for c in df_loc.columns if "lat" in c.lower()), None)
         lon_c = next((c for c in df_loc.columns if "lon" in c.lower() or "lng" in c.lower()), None)
-        spd_c = next((c for c in df_loc.columns if "speed" in c.lower()), None)
+        spd_c = next((c for c in df_loc.columns if "speed" in c.lower() and "acc" not in c.lower()), None)
+        acc_acc_c = next((c for c in df_loc.columns if "horizontalaccuracy" in c.lower() or "accuracy" in c.lower()), None)
+        crs_c = next((c for c in df_loc.columns if "bearing" in c.lower() and "accuracy" not in c.lower() or "orientation" in c.lower()), None)
 
         if lat_c and lon_c:
             out_dict["latitude"] = np.interp(t_uniform, t_loc, df_loc[lat_c].values)
@@ -150,6 +181,10 @@ def merge_sensor_folder(folder_path: str, output_csv: str, target_fs: float = 10
                 out_dict["speed"] = np.interp(t_uniform, t_loc, df_loc[spd_c].values)
             else:
                 out_dict["speed"] = np.zeros(n_samples)
+            if acc_acc_c:
+                out_dict["accuracy"] = np.interp(t_uniform, t_loc, df_loc[acc_acc_c].values)
+            if crs_c:
+                out_dict["bearing"] = np.interp(t_uniform, t_loc, df_loc[crs_c].values)
 
     out_df = pd.DataFrame(out_dict)
     os.makedirs(os.path.dirname(os.path.abspath(output_csv)), exist_ok=True)

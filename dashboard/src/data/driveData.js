@@ -5,11 +5,25 @@
  */
 
 import myWalkPoints from './myWalkPoints.json';
+import myRidePoints from './myRidePoints.json';
 import svw12Points from './svw12Points.json';
 import svta10Points from './svta10Points.json';
 import svw10Points from './svw10Points.json';
 
 export const REAL_DRIVES = {
+  "my-ride": {
+    id: "my-ride",
+    name: "🚗 Real Vehicle Ride (Urban Patiala · Phone IMU + TCN Model)",
+    vehicle: "Real Smartphone (Vehicle Mount · 48.3s Ride Log)",
+    duration_s: 48.2,
+    sample_rate_hz: 10.0,
+    ref_lat: 30.342429,
+    ref_lon: 76.378576,
+    outage_start_s: 15.0,
+    outage_len_s: 30.0,
+    distance_m: 579.8,
+    generatePoints: () => myRidePoints
+  },
   "S-Vw12": {
     id: "S-Vw12",
     name: "IO-VNBD S-Vw12 (Ford Fiesta · M5 Motorway & Worcestershire)",

@@ -1,38 +1,38 @@
 {
   "drive": "my_walk_synced",
-  "outage_start_s": 20.0,
+  "outage_start_s": 25.0,
   "outage_duration_s": 40.0,
-  "distance_travelled_m": 44.12,
+  "distance_travelled_m": 48.18,
   "sih_target_threshold_pct": 10.0,
-  "sih_benchmark_passed": true,
+  "sih_benchmark_passed": false,
   "results": {
     "Raw IMU Double Integration": {
-      "distance_m": 44.12,
-      "final_error_m": 48.60,
-      "max_error_m": 48.60,
-      "ate_rmse_m": 29.84,
-      "drift_pct": 110.15
+      "distance_m": 48.18,
+      "final_error_m": 60.14,
+      "max_error_m": 60.14,
+      "ate_rmse_m": 38.76,
+      "drift_pct": 124.82
     },
     "Standard EKF/UKF (No AI)": {
-      "distance_m": 44.12,
-      "final_error_m": 24.48,
-      "max_error_m": 38.10,
-      "ate_rmse_m": 26.14,
-      "drift_pct": 55.48
+      "distance_m": 48.18,
+      "final_error_m": 12.83,
+      "max_error_m": 21.05,
+      "ate_rmse_m": 16.05,
+      "drift_pct": 26.62
     },
     "AI Velocity-Aided UKF": {
-      "distance_m": 44.12,
-      "final_error_m": 1.82,
-      "max_error_m": 2.10,
-      "ate_rmse_m": 1.45,
-      "drift_pct": 4.12
+      "distance_m": 48.18,
+      "final_error_m": 18.95,
+      "max_error_m": 37.16,
+      "ate_rmse_m": 24.36,
+      "drift_pct": 39.32
     },
     "NavResilient + Map-Matching": {
-      "distance_m": 44.12,
-      "final_error_m": 0.45,
-      "max_error_m": 0.45,
-      "ate_rmse_m": 0.38,
-      "drift_pct": 1.02
+      "distance_m": 48.18,
+      "final_error_m": 20.66,
+      "max_error_m": 20.66,
+      "ate_rmse_m": 10.12,
+      "drift_pct": 42.87
     }
   }
 }

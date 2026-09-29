@@ -1,0 +1,38 @@
+{
+  "drive": "my_ride_synced",
+  "outage_start_s": 15.0,
+  "outage_duration_s": 30.0,
+  "distance_travelled_m": 317.84,
+  "sih_target_threshold_pct": 10.0,
+  "sih_benchmark_passed": false,
+  "results": {
+    "Raw IMU Double Integration": {
+      "distance_m": 317.84,
+      "final_error_m": 72.17,
+      "max_error_m": 72.17,
+      "ate_rmse_m": 44.82,
+      "drift_pct": 22.71
+    },
+    "Standard EKF/UKF (No AI)": {
+      "distance_m": 317.84,
+      "final_error_m": 483.02,
+      "max_error_m": 406.75,
+      "ate_rmse_m": 229.21,
+      "drift_pct": 151.97
+    },
+    "AI Velocity-Aided UKF (TCN)": {
+      "distance_m": 317.84,
+      "final_error_m": 127.11,
+      "max_error_m": 127.11,
+      "ate_rmse_m": 81.86,
+      "drift_pct": 39.99
+    },
+    "NavResilient + Map-Matching": {
+      "distance_m": 317.84,
+      "final_error_m": 127.1,
+      "max_error_m": 139.81,
+      "ate_rmse_m": 101.68,
+      "drift_pct": 39.99
+    }
+  }
+}

@@ -15,24 +15,24 @@
     },
     "Standard EKF/UKF (No AI)": {
       "distance_m": 578.67,
-      "final_error_m": 157.59,
-      "max_error_m": 203.87,
-      "ate_rmse_m": 115.55,
-      "drift_pct": 27.23
+      "final_error_m": 155.04,
+      "max_error_m": 200.68,
+      "ate_rmse_m": 113.17,
+      "drift_pct": 26.79
     },
     "AI Velocity-Aided UKF": {
       "distance_m": 578.67,
-      "final_error_m": 155.97,
-      "max_error_m": 201.29,
-      "ate_rmse_m": 113.65,
-      "drift_pct": 26.95
+      "final_error_m": 154.99,
+      "max_error_m": 200.18,
+      "ate_rmse_m": 112.86,
+      "drift_pct": 26.78
     },
     "NavResilient + Map-Matching": {
       "distance_m": 578.67,
-      "final_error_m": 88.81,
-      "max_error_m": 169.0,
-      "ate_rmse_m": 87.17,
-      "drift_pct": 15.35
+      "final_error_m": 88.5,
+      "max_error_m": 168.93,
+      "ate_rmse_m": 87.08,
+      "drift_pct": 15.29
     }
   }
 }
